@@ -1,3 +1,4 @@
-const appVersion = '1.7.0';
-const siteUrl = 'https://mr-who-root.github.io/shelfwise/';
-const repoUrl = 'https://github.com/RajkumarPadmanabhan/shelfwise.apk';
+const appVersion = '1.7.1';
+const siteUrl = 'https://rajkumarpadmanabhan.github.io/update-shelf/';
+const repo = 'RajkumarPadmanabhan/update-shelf';
+const repoUrl = 'https://github.com/$repo';

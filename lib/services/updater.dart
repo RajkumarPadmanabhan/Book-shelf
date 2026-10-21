@@ -18,7 +18,7 @@ class Release {
 /// so nothing else would tell them an update exists).
 class Updater {
   static final available = ValueNotifier<Release?>(null);
-  static const _api = 'https://api.github.com/repos/RajkumarPadmanabhan/shelfwise.apk/releases/latest';
+  static const _api = 'https://api.github.com/repos/$repo/releases/latest';
 
   /// 1.10.0 > 1.9.2
   static bool newer(String a, String b) {

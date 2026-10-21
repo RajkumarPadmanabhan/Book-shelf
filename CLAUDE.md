@@ -2,6 +2,8 @@
 
 Shelfwise is a Flutter Android app: a cozy bookshelf, PDF/EPUB reader and reading to-do list. It's a port of the "Readers" HTML mockup (`../readers.html` in the original workspace), with Explore replaced by To-do and everything stored on the phone.
 
+Repo: https://github.com/RajkumarPadmanabhan/update-shelf (moved from `RajkumarPadmanabhan/shelfwise.apk`). Website: https://rajkumarpadmanabhan.github.io/update-shelf/. The repo slug and site URL live in `lib/version.dart` (`repo`, `siteUrl`); the updater and the Settings links read them from there.
+
 ## Workflow rules (always follow)
 
 - **Branches:** do all work on `dev`. Build it, install it on the test phone and check it there first. Only then fast-forward `main` to `dev` and push both.

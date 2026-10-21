@@ -2,7 +2,7 @@
 
 A cozy bookshelf and reading to-do app for Android, built with Flutter.
 
-**Download:** grab the latest APK from the [releases page](https://github.com/Mr-Who-Root/shelfwise/releases/latest), or visit the [website](https://mr-who-root.github.io/shelfwise/).
+**Download:** grab the latest APK from the [releases page](https://github.com/RajkumarPadmanabhan/update-shelf/releases/latest), or visit the [website](https://rajkumarpadmanabhan.github.io/update-shelf/).
 
 <p align="center">
   <img src="docs/screens/home.png" width="180" alt="Home">
