@@ -37,7 +37,7 @@ Color parseStickyInk(String hex) =>
 /// Interactive fluttering sticky note widget (inspired by notes.html).
 /// Features:
 /// - 3D perspective paper flutter animation.
-/// - Top tape band with red pushpin / thumbtack.
+/// - Top tape band with a red pushpin / thumbtack (hidden when [showPin] is false).
 /// - Realistic multi-layered paper drop shadows.
 /// - Dynamic tilt while dragging.
 /// - Paper rip tear animation with sound.
@@ -49,6 +49,7 @@ class StickyNoteWidget extends StatefulWidget {
   final double minHeight;
   final bool enableDrag;
   final bool canEdit;
+  final bool showPin;
   final VoidCallback? onTear;
   final void Function(double dx, double dy)? onMoved;
   final VoidCallback? onEdited;
@@ -60,6 +61,7 @@ class StickyNoteWidget extends StatefulWidget {
     this.minHeight = 112,
     this.enableDrag = true,
     this.canEdit = true,
+    this.showPin = true,
     this.onTear,
     this.onMoved,
     this.onEdited,
@@ -354,7 +356,7 @@ class _StickyNoteWidgetState extends State<StickyNoteWidget>
             mainAxisSize: MainAxisSize.min,
             children: [
               // Top Tape strip with red pushpin
-              _TapeWithPin(paperColor: paperColor, height: (24 * fontScale).clamp(20.0, 28.0)),
+              _TapeWithPin(paperColor: paperColor, height: (24 * fontScale).clamp(20.0, 28.0), showPin: widget.showPin),
 
               // Note handwritten body
               Padding(
@@ -388,7 +390,8 @@ class _StickyNoteWidgetState extends State<StickyNoteWidget>
 class _TapeWithPin extends StatelessWidget {
   final Color paperColor;
   final double height;
-  const _TapeWithPin({required this.paperColor, this.height = 24});
+  final bool showPin;
+  const _TapeWithPin({required this.paperColor, this.height = 24, this.showPin = true});
 
   @override
   Widget build(BuildContext context) {
@@ -408,7 +411,7 @@ class _TapeWithPin extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: Container(
+      child: !showPin ? null : Container(
         width: (height * 0.54).clamp(10.0, 15.0),
         height: (height * 0.54).clamp(10.0, 15.0),
         decoration: const BoxDecoration(

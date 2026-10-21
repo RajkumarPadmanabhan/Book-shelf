@@ -617,18 +617,6 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  /// Update pin offset (called when the user drags a pinned note).
-  void movePinnedTodoStickyNote(String noteId, double offX, double offY) {
-    for (final n in todoNotes) {
-      if (n.id == noteId) {
-        n.pinOffsetX = offX;
-        n.pinOffsetY = offY;
-        changed();
-        break;
-      }
-    }
-  }
-
   Collection? colOf(Item it) {
     for (final c in cols) {
       if (c.items.contains(it)) return c;

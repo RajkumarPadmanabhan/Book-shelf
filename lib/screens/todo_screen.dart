@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../data/models.dart';
 import '../data/store.dart';
@@ -20,6 +19,10 @@ import 'bell.dart';
 class TodoUi {
   static String f = 'all';
   static final seen = <String>{};
+  static final _links = <String, LayerLink>{};
+
+  /// Links a to-do tile (target) to the notes pinned on it (followers).
+  static LayerLink link(String todoId) => _links.putIfAbsent(todoId, LayerLink.new);
 }
 
 const _sizes = ['big', 'small', 'small', 'wide', 'small', 'small'];
@@ -518,6 +521,7 @@ class _FreeTodoNoteState extends State<_FreeTodoNote> {
           width: widget.noteW,
           minHeight: widget.noteH,
           canEdit: true,
+          showPin: false, // the pushpin only appears once it's pinned to a to-do
           onMoved: (dx, dy) {
             final newLeft = (widget.curLeft + dx).clamp(6.0, (widget.screenW - widget.noteW - 6.0).clamp(6.0, widget.screenW));
             final newTop = (widget.curTop + dy).clamp(widget.topPad + 50.0, (widget.screenH - widget.botPad - widget.noteH - 60.0).clamp(widget.topPad + 50.0, widget.screenH));
@@ -534,39 +538,15 @@ class _FreeTodoNoteState extends State<_FreeTodoNote> {
 }
 
 // ---------------------------------------------------------------------------
-// Pinned note: always repositioned to its todo tile's live screen rect
+// Pinned note: glued to its todo tile, follows it while scrolling
 // ---------------------------------------------------------------------------
 
-class _PinnedTodoNote extends StatefulWidget {
+class _PinnedTodoNote extends StatelessWidget {
   final StickyNote note;
   const _PinnedTodoNote({super.key, required this.note});
 
   @override
-  State<_PinnedTodoNote> createState() => _PinnedTodoNoteState();
-}
-
-class _PinnedTodoNoteState extends State<_PinnedTodoNote> with SingleTickerProviderStateMixin {
-  late Ticker? _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    // Refresh every frame so the note tracks smooth scroll movement
-    _ticker = createTicker((_) {
-      if (mounted) setState(() {});
-    });
-    _ticker!.start();
-  }
-
-  @override
-  void dispose() {
-    _ticker?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final note = widget.note;
     final mq = MediaQuery.of(context);
     final noteW = switch (note.size) {
       's' => 110.0,
@@ -579,78 +559,53 @@ class _PinnedTodoNoteState extends State<_PinnedTodoNote> with SingleTickerProvi
       _ => 112.0,
     };
 
-    final tileRect = TodoBoundsRegistry.items[note.pinnedTodoId];
-    if (tileRect == null) {
-      // Todo tile scrolled out of view — hide the note
-      return const SizedBox.shrink();
-    }
-
-    final left = tileRect.left + (note.pinOffsetX ?? 8.0);
-    final top  = tileRect.top  + (note.pinOffsetY ?? 8.0);
-
+    // Hidden while its tile is scrolled away or filtered out (no target).
     return Positioned(
-      left: left,
-      top: top,
-      child: GestureDetector(
-        // Long-press to unpin
-        onLongPress: () {
-          Sfx.play('pop');
-          openDialog((ctx) => AppDialog(
-                title: '📌 Unpin this note?',
-                maxWidth: 320,
-                children: [
-                  Text(
-                    'The note will be freed and float on the screen again at its current position.',
-                    style: nu(14, FontWeight.w600, C.muted, 1.4),
-                  ),
-                ],
-                actions: [
-                  const Btn('Cancel'),
-                  Btn('Unpin', kind: Kind.pri, onTap: () {
-                    // Convert current screen pos back to % coords
-                    final nx = (left / mq.size.width) * 100.0;
-                    final ny = (top / mq.size.height) * 100.0;
-                    store.moveTodoStickyNote(note.id, nx, ny);
-                    store.unpinTodoStickyNote(note.id);
-                    toast('Note unpinned');
-                    return true;
-                  }),
-                ],
-              ));
-        },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            StickyNoteWidget(
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: TodoUi.link(note.pinnedTodoId!),
+        offset: Offset(note.pinOffsetX ?? 8.0, note.pinOffsetY ?? 8.0),
+        showWhenUnlinked: false,
+        child: Builder(
+          builder: (noteCtx) => GestureDetector(
+            // Long-press to unpin
+            onLongPress: () {
+              Sfx.play('pop');
+              openDialog((ctx) => AppDialog(
+                    title: '📌 Unpin this note?',
+                    maxWidth: 320,
+                    children: [
+                      Text(
+                        'The note will be freed and float on the screen again at its current position.',
+                        style: nu(14, FontWeight.w600, C.muted, 1.4),
+                      ),
+                    ],
+                    actions: [
+                      const Btn('Cancel'),
+                      Btn('Unpin', kind: Kind.pri, onTap: () {
+                        // Convert current screen pos back to % coords
+                        final box = noteCtx.findRenderObject() as RenderBox?;
+                        final pos = box != null && box.attached ? box.localToGlobal(Offset.zero) : Offset.zero;
+                        store.moveTodoStickyNote(note.id, pos.dx / mq.size.width * 100.0, pos.dy / mq.size.height * 100.0);
+                        store.unpinTodoStickyNote(note.id);
+                        toast('Note unpinned');
+                        return true;
+                      }),
+                    ],
+                  ));
+            },
+            child: StickyNoteWidget(
               key: ValueKey('pinInner_${note.id}'),
               note: note,
               width: noteW,
               minHeight: noteH,
               canEdit: true,
-              onMoved: (dx, dy) {
-                // Move relative to the tile
-                final newOffX = (note.pinOffsetX ?? 8.0) + dx;
-                final newOffY = (note.pinOffsetY ?? 8.0) + dy;
-                store.movePinnedTodoStickyNote(note.id, newOffX, newOffY);
-              },
+              enableDrag: false, // pinned notes stay put; long-press to unpin
               onEdited: () => store.changed(),
               onTear: () => store.removeTodoStickyNote(note.id),
             ),
-            // Pin icon badge
-            Positioned(
-              top: -6,
-              right: -6,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35),
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                ),
-                child: const Text('📌', style: TextStyle(fontSize: 10)),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -686,23 +641,45 @@ class TodoTile extends StatefulWidget {
 class _TodoTileState extends State<TodoTile> {
   late final bool _fresh = TodoUi.seen.add(widget.t.id);
   final _checkKey = GlobalKey();
+  ScrollPosition? _scroll;
+  bool _reportQueued = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reportBounds());
+    _queueReport();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Scrolling doesn't rebuild the tile, so re-report its bounds on scroll too.
+    final pos = Scrollable.maybeOf(context)?.position;
+    if (pos == _scroll) return;
+    _scroll?.removeListener(_queueReport);
+    _scroll = pos?..addListener(_queueReport);
   }
 
   @override
   void didUpdateWidget(TodoTile old) {
     super.didUpdateWidget(old);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reportBounds());
+    _queueReport();
   }
 
   @override
   void dispose() {
+    _scroll?.removeListener(_queueReport);
     TodoBoundsRegistry.items.remove(widget.t.id);
     super.dispose();
+  }
+
+  void _queueReport() {
+    if (_reportQueued) return;
+    _reportQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reportQueued = false;
+      _reportBounds();
+    });
   }
 
   void _reportBounds() {
@@ -907,7 +884,7 @@ class _TodoTileState extends State<TodoTile> {
         child: tile,
       );
     }
-    return tile;
+    return CompositedTransformTarget(link: TodoUi.link(t.id), child: tile);
   }
 
   void _toggle(Todo t) {
