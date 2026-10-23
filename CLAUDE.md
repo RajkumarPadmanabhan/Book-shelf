@@ -37,6 +37,7 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
   - `fx.dart`: tear/smash, decoration animations, confetti.
   - `dialogs.dart`: `openDialog`/`AppDialog`/`Btn`. A `Btn.onTap` that returns `false` keeps the dialog open.
   - `common.dart`: toast, `Pressable`, `PopChip`, `AppInput`.
+  - `share_bag.dart`: the Home share bag (drop a book from a Home shelf to add a copy), its QR card, and the scan → Shared shelf import. The QR text format lives in `lib/services/book_qr.dart` (details only, no covers or files; covers are looked up by ISBN after import); the scanner is `screens/qr_scan_screen.dart`.
 - `lib/screens/`: one file per page. The reader is `reader_screen.dart` (paper curl, zoom, bookmarks/notes, reading time) on top of `lib/reader/source.dart` (`PdfSource`) and `lib/reader/epub.dart` (EPUB parse in an isolate + pagination).
 - `lib/services/`: synthesised sound effects, notifications, update checks (GitHub API), ISBN lookup (Open Library, then Google Books), share/save images.
 

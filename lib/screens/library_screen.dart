@@ -11,7 +11,7 @@ import '../icons.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import '../widgets/book_cover.dart';
-import '../widgets/book_share_sheet.dart';
+import '../widgets/share_bag.dart';
 import '../widgets/common.dart';
 import '../widgets/copy_panel.dart';
 import '../widgets/dialogs.dart';
@@ -176,6 +176,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ..._shelves(),
             ],
           ),
+          if (home)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 96 + MediaQuery.paddingOf(context).bottom,
+              child: const ShareBagButton(),
+            ),
           if (!home)
             Positioned(
               right: 20,
@@ -286,14 +293,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         const SizedBox(width: 8),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           if (home) ...[
-            Builder(
-              builder: (ctx) => BadgeButton(
-                icon: Ic.share,
-                count: 0,
-                label: 'Share',
-                onTap: () => openBookShareSheet(ctx, initialTab: 0),
-              ),
-            ),
+            BadgeButton(icon: Ic.qr, count: 0, label: 'Scan shared books', onTap: scanSharedBooks),
             const SizedBox(width: 10),
           ],
           const BellButton(),

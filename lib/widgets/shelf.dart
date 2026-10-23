@@ -11,10 +11,10 @@ import '../data/store.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import 'book_cover.dart';
-import 'book_share_sheet.dart';
 import 'common.dart';
 import 'dialogs.dart';
 import 'pet_overlay.dart';
+import 'share_bag.dart';
 import 'shelf_cd.dart';
 import 'sticky_note.dart';
 
@@ -65,7 +65,9 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
 
   String? _pressed;
   Item? _drag;
-  double _dragX = 0, _dragY = 0, _grab = 0, _finger = 0, _vx = 0;
+  double _dragX = 0, _grab = 0, _finger = 0, _vx = 0;
+  OverlayEntry? _ghost; // Home: the copy of the book that follows the finger to the share bag
+  final _ghostAt = ValueNotifier(Offset.zero);
   int? _insertAt; // where the dragged item would land; the others slide apart to make room
   bool _overflow = false;
   final Set<String> _fresh = {};
@@ -113,6 +115,8 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
       final key = '${widget.col.id}-${widget.sub ? "sub" : "main"}';
       ShelfBoundsRegistry.unregister(key);
     }
+    _dropGhost();
+    _ghostAt.dispose();
     _auto.dispose();
     _shine.dispose();
     _sc.dispose();
@@ -202,23 +206,58 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
       _drag = it;
       _grab = d.localPosition.dx;
       _dragX = s.x;
-      _dragY = 0;
       _finger = s.x + _grab;
       _insertAt = widget.items.indexOf(it);
     });
-    if (!widget.home) _auto.start();
+    if (widget.home) {
+      _liftGhost(it, d.globalPosition);
+    } else {
+      _auto.start();
+    }
+  }
+
+  /// Home: a copy of [it] follows the finger so it can be dropped on the share bag.
+  void _liftGhost(Item it, Offset at) {
+    _dropGhost();
+    _ghostAt.value = at;
+    final gw = _w * 1.1, gh = _h * 1.1;
+    _ghost = OverlayEntry(
+      builder: (_) => ValueListenableBuilder<Offset>(
+        valueListenable: _ghostAt,
+        builder: (_, p, child) => Positioned(left: p.dx - gw / 2, top: p.dy - gh * .8, child: child!),
+        child: IgnorePointer(
+          child: Transform.rotate(
+            angle: -5 * pi / 180,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                boxShadow: const [BoxShadow(color: Color.fromRGBO(0, 0, 0, .4), offset: Offset(0, 16), blurRadius: 26)],
+              ),
+              child: BookCover(it, w: gw, h: gh),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context, rootOverlay: true).insert(_ghost!);
+    ShareBagUi.hover.value = false;
+    ShareBagUi.dragging.value = true;
+  }
+
+  void _dropGhost() {
+    _ghost?.remove();
+    _ghost = null;
+    ShareBagUi.dragging.value = false;
+    ShareBagUi.hover.value = false;
   }
 
   void _dragMove(LongPressMoveUpdateDetails d) {
     if (widget.home) {
-      final box = _stackKey.currentContext?.findRenderObject() as RenderBox?;
-      if (box != null) {
-        final local = box.globalToLocal(d.globalPosition);
-        final dy = local.dy - (_h * 0.7);
-        setState(() {
-          _dragX = local.dx - _grab;
-          _dragY = dy.clamp(-220.0, 20.0);
-        });
+      _ghostAt.value = d.globalPosition;
+      final over = ShareBagUi.hits(d.globalPosition);
+      if (over != ShareBagUi.hover.value) {
+        ShareBagUi.hover.value = over;
+        if (over) Buzz.tick();
       }
       return;
     }
@@ -258,22 +297,22 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
   void _dragEnd() {
     if (widget.home) {
       final d = _drag;
-      final dy = _dragY;
-      final dx = _dragX;
+      final over = ShareBagUi.hover.value;
+      _dropGhost();
       setState(() {
         _drag = null;
         _insertAt = null;
-        _dragY = 0;
       });
       if (d == null) return;
-      if (dy < -35) {
-        final screenW = MediaQuery.sizeOf(context).width;
-        final isSend = dx < (screenW * 0.5);
+      if (!over) {
+        Sfx.play('drop');
+      } else if (store.addToBag(d)) {
         Buzz.medium();
-        Sfx.play('swoosh');
-        openBookShareSheet(context, book: d, initialTab: isSend ? 0 : 1);
+        Sfx.play('pop');
+        toast('“${d.title}” is in the share bag');
       } else {
         Sfx.play('drop');
+        toast('“${d.title}” is already in the share bag');
       }
       return;
     }
@@ -484,17 +523,6 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
           ),
         Positioned(left: 12, bottom: 13, right: widget.home ? 12 : 140, child: Align(alignment: Alignment.centerLeft, child: _slab(p))),
         if (!widget.home) Positioned(right: 12, bottom: 10, child: _acts()),
-        if (widget.home && _drag != null && _dragY < -25)
-          Positioned(
-            left: 16,
-            right: 16,
-            top: -60,
-            height: 52,
-            child: _DragShareOverlay(
-              dragX: _dragX,
-              hoverSend: _dragX < (vw * 0.5),
-            ),
-          ),
       ]);
     });
   }
@@ -543,11 +571,13 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
       if (i < slots.length - 1 && slots[i + 1].it.id == _pressed) dx = -8;
     }
     final Matrix4 m;
-    if (dragging) {
+    if (dragging && widget.home) {
+      m = Matrix4.identity()..translateByDouble(0, -8, 0, 1);
+    } else if (dragging) {
       m = Matrix4.identity()
-        ..translateByDouble(0, widget.home ? _dragY : -14, 0, 1)
+        ..translateByDouble(0, -14, 0, 1)
         ..rotateZ(-3 * pi / 180)
-        ..scaleByDouble(widget.home ? 1.15 : 1.12, widget.home ? 1.15 : 1.12, 1, 1);
+        ..scaleByDouble(1.12, 1.12, 1, 1);
     } else if (lifted) {
       if (it.gadget == 'cd') {
         m = Matrix4.identity()
@@ -563,7 +593,7 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
       m = Matrix4.identity()..translateByDouble(dx, 0, 0, 1);
     }
     final shadows = <BoxShadow>[
-      if (!it.isDecor && dragging) const BoxShadow(color: Color.fromRGBO(0, 0, 0, .4), offset: Offset(0, 16), blurRadius: 26),
+      if (!it.isDecor && dragging && !widget.home) const BoxShadow(color: Color.fromRGBO(0, 0, 0, .4), offset: Offset(0, 16), blurRadius: 26),
       if (!it.isDecor && lifted && !dragging) ...const [
         BoxShadow(color: Color.fromRGBO(40, 20, 5, .45), offset: Offset(0, 18), blurRadius: 22, spreadRadius: -6),
         BoxShadow(color: Color.fromRGBO(0, 0, 0, .2), offset: Offset(0, 4), blurRadius: 8),
@@ -577,6 +607,7 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
             animation: _shine,
             builder: (_, _) => BookCover(it, w: s.w, h: s.h, shine: lifted ? _shine.value : 0),
           );
+    if (dragging && widget.home) face = Opacity(opacity: .45, child: face);
     if (_fresh.contains(it.id)) {
       face = TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
@@ -597,7 +628,7 @@ class _ShelfRowState extends State<ShelfRow> with TickerProviderStateMixin {
       key: ValueKey(it.id),
       duration: dur,
       curve: ease,
-      left: dragging ? _dragX : s.x,
+      left: dragging && !widget.home ? _dragX : s.x,
       bottom: 14,
       width: s.w,
       height: s.h,
@@ -1158,69 +1189,5 @@ class _PillThumb extends SliderComponentShape {
     final c = context.canvas;
     c.drawRRect(r.shift(const Offset(0, 1)), Paint()..color = const Color.fromRGBO(0, 0, 0, .3)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
     c.drawRRect(r, Paint()..color = C.brown);
-  }
-}
-
-class _DragShareOverlay extends StatelessWidget {
-  final double dragX;
-  final bool hoverSend;
-
-  const _DragShareOverlay({required this.dragX, required this.hoverSend});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xF22B1D10),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Color.fromRGBO(0, 0, 0, .35), blurRadius: 14, offset: Offset(0, 4)),
-        ],
-        border: Border.all(color: const Color(0x33FFE1B4), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: hoverSend ? C.brown : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('📤', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 6),
-                  Text('Drop to Send', style: nu(13, FontWeight.w800, Colors.white)),
-                ],
-              ),
-            ),
-          ),
-          Container(width: 1, height: 26, color: const Color(0x33FFFFFF)),
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: !hoverSend ? C.brown : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('📥', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 6),
-                  Text('Drop to Receive', style: nu(13, FontWeight.w800, Colors.white)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'posts_models.dart';
 import 'sample_data.dart';
+import '../services/book_qr.dart';
 import '../services/cd_player.dart';
 
 const shelfMax = 10;
@@ -83,6 +84,7 @@ class AppStore extends ChangeNotifier {
   List<String> headings = [];
   List<Todo> todos = [];
   List<StickyNote> todoNotes = [];
+  List<String> shareBag = []; // ids of the books dropped into the Home share bag
   Settings settings = Settings();
   Set<String> claimed = {};
   int? lastBackup;
@@ -131,6 +133,7 @@ class AppStore extends ChangeNotifier {
         'todos': todos.map((t) => t.toJson()).toList(),
         if (todoNotes.isNotEmpty)
           'todoNotes': todoNotes.map((n) => n.toJson()).toList(),
+        if (shareBag.isNotEmpty) 'bag': shareBag,
         'settings': settings.toJson(),
         'claimed': claimed.toList(),
         if (lastBackup != null) 'lastBackup': lastBackup,
@@ -156,6 +159,7 @@ class AppStore extends ChangeNotifier {
     headings = ((j['headings'] ?? const []) as List).cast<String>().toList();
     todos = ((j['todos'] ?? const []) as List).map((e) => Todo.fromJson((e as Map).cast<String, dynamic>())).toList();
     todoNotes = ((j['todoNotes'] ?? const []) as List).map((e) => StickyNote.fromJson((e as Map).cast<String, dynamic>())).toList();
+    shareBag = ((j['bag'] ?? const []) as List).cast<String>().toList();
     settings = Settings.fromJson(((j['settings'] ?? const {}) as Map).cast<String, dynamic>());
     claimed = ((j['claimed'] ?? const []) as List).cast<String>().toSet();
     lastBackup = (j['lastBackup'] as num?)?.toInt();
@@ -956,6 +960,7 @@ class AppStore extends ChangeNotifier {
     ];
     todos = [];
     todoNotes = [];
+    shareBag = [];
     headings = [];
     claimed = {};
     settings = Settings();
@@ -1000,29 +1005,67 @@ class AppStore extends ChangeNotifier {
     changed();
   }
 
-  Item receiveSharedBook(Item book, {required String fromUser, bool permanent = false}) {
-    Collection? sharedCol;
-    for (final c in cols) {
-      if (c.name.trim().toLowerCase() == 'shared books') {
-        sharedCol = c;
-        break;
-      }
-    }
-    if (sharedCol == null) {
-      sharedCol = Collection(name: 'Shared books', emoji: '🤝');
-      cols.insert(0, sharedCol);
-    }
-    final copy = book.copy();
-    copy.id = newId();
-    final cleanSender = fromUser.trim().isNotEmpty ? fromUser.trim() : 'Friend';
-    copy.fromUser = cleanSender;
-    sharedCol.items.insert(0, copy);
+  // ---------- share bag & shared books ----------
 
-    if (permanent && !pairedFriends.contains(cleanSender)) {
-      pairedFriends.add(cleanSender);
+  /// The books in the share bag (ids of deleted books are skipped).
+  List<Item> get bagBooks {
+    final byId = {for (final b in allBooks) b.id: b};
+    return [for (final id in shareBag) ?byId[id]];
+  }
+
+  /// Drops a copy of [b] into the share bag; false if it's already there.
+  bool addToBag(Item b) {
+    if (shareBag.contains(b.id)) return false;
+    shareBag.add(b.id);
+    changed();
+    return true;
+  }
+
+  void removeFromBag(Item b) {
+    shareBag.remove(b.id);
+    changed();
+  }
+
+  void clearBag() {
+    shareBag.clear();
+    changed();
+  }
+
+  /// Adds books received by QR to the "Shared" shelf (then "Shared 2", … once
+  /// a shelf is full), skipping ones already on a Shared shelf. Returns the
+  /// new items and how many were skipped as duplicates.
+  (List<Item>, int) addSharedBooks(List<SharedBook> books, {required String from}) {
+    bool isShared(Collection c) => RegExp(r'^shared( \d+)?$').hasMatch(c.name.trim().toLowerCase());
+    String key(String t, String a) => '${t.trim().toLowerCase()}|${a.trim().toLowerCase()}';
+    final have = {for (final c in cols.where(isShared)) for (final b in c.books) key(b.title, b.author)};
+    final added = <Item>[];
+    var skipped = 0;
+    for (final sb in books) {
+      if (!have.add(key(sb.title, sb.author))) {
+        skipped++;
+        continue;
+      }
+      Collection? col;
+      bool? place;
+      for (final c in cols.where(isShared)) {
+        place = placeFor(c);
+        if (place != null) {
+          col = c;
+          break;
+        }
+      }
+      if (col == null) {
+        final n = cols.where(isShared).length;
+        col = Collection(name: n == 0 ? 'Shared' : 'Shared ${n + 1}', emoji: '🤝');
+        cols.insert(0, col);
+        place = false;
+      }
+      final b = Item(title: sb.title, author: sb.author, desc: sb.desc, isbn: sb.isbn, fromUser: from);
+      addBook(col, b, sub: place!);
+      added.add(b);
     }
     changed();
-    return copy;
+    return (added, skipped);
   }
 
   static String nameFromEmail(String email) {
