@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/store.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import 'common.dart';
@@ -43,6 +44,8 @@ Color parseStickyInk(String hex) =>
 /// - Paper rip tear animation with sound.
 /// - Customizable size: Small ('s'), Medium ('m'), Large ('l').
 /// - Tap to view/edit text, paper color, ink color, and size.
+/// - With [onPinChanged] (To-do page notes), the editor can also pin the note
+///   to a to-do or unpin it.
 class StickyNoteWidget extends StatefulWidget {
   final StickyNote note;
   final double width;
@@ -53,6 +56,7 @@ class StickyNoteWidget extends StatefulWidget {
   final VoidCallback? onTear;
   final void Function(double dx, double dy)? onMoved;
   final VoidCallback? onEdited;
+  final ValueChanged<String?>? onPinChanged; // to-do id, or null to unpin
 
   const StickyNoteWidget({
     super.key,
@@ -65,6 +69,7 @@ class StickyNoteWidget extends StatefulWidget {
     this.onTear,
     this.onMoved,
     this.onEdited,
+    this.onPinChanged,
   });
 
   @override
@@ -148,6 +153,7 @@ class _StickyNoteWidgetState extends State<StickyNoteWidget>
             widget.onEdited?.call();
           },
           onTear: _tearNote,
+          onPinChanged: widget.onPinChanged,
         ));
   }
 
@@ -444,11 +450,13 @@ class _StickyNoteEditorDialog extends StatefulWidget {
   final StickyNote note;
   final void Function(String text, String color, String ink, String size) onSave;
   final VoidCallback onTear;
+  final ValueChanged<String?>? onPinChanged;
 
   const _StickyNoteEditorDialog({
     required this.note,
     required this.onSave,
     required this.onTear,
+    this.onPinChanged,
   });
 
   @override
@@ -461,6 +469,7 @@ class _StickyNoteEditorDialogState extends State<_StickyNoteEditorDialog> {
   late String _color = widget.note.color;
   late String _ink = widget.note.ink;
   late String _size = widget.note.size;
+  late String? _pinId = widget.note.pinnedTodoId;
 
   @override
   void dispose() {
@@ -491,7 +500,11 @@ class _StickyNoteEditorDialogState extends State<_StickyNoteEditorDialog> {
           kind: Kind.pri,
           onTap: () {
             widget.onSave(_ctrl.text.trim(), _color, _ink, _size);
-            toast('Note updated');
+            if (widget.onPinChanged != null && _pinId != widget.note.pinnedTodoId) {
+              widget.onPinChanged!(_pinId); // shows its own toast
+            } else {
+              toast('Note updated');
+            }
             return true;
           },
         ),
@@ -668,7 +681,81 @@ class _StickyNoteEditorDialogState extends State<_StickyNoteEditorDialog> {
               ),
           ],
         ),
+        if (widget.onPinChanged != null) ...[
+          const SizedBox(height: 14),
+          TodoPinPicker(selected: _pinId, onChanged: (id) => setState(() => _pinId = id)),
+        ],
       ],
+    );
+  }
+}
+
+/// "Pin to a to-do" chooser for To-do page notes: "Not pinned" plus every
+/// open to-do (and the current one, even if it's done).
+class TodoPinPicker extends StatelessWidget {
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+  const TodoPinPicker({super.key, required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final todos = store.todos.where((t) => !t.done || t.id == selected).toList()..sort(store.todoOrder);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Pin to a to-do', style: nu(13, FontWeight.w800, C.chipText)),
+      const SizedBox(height: 8),
+      _option(null, '🗒️', 'Not pinned', 'Floats freely on the page'),
+      if (todos.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text('Add a to-do first, then you can pin this note to it.', style: nu(12, FontWeight.w600, C.muted)),
+        )
+      else
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 236),
+          child: SingleChildScrollView(
+            child: Column(children: [
+              for (final t in todos)
+                _option(t.id, t.done ? '✅' : '📌', t.text,
+                    t.done ? 'Done' : (t.dueAt != null ? fmtDue(t.dueAt!) : 'Someday')),
+            ]),
+          ),
+        ),
+    ]);
+  }
+
+  Widget _option(String? id, String emoji, String title, String sub) {
+    final on = id == selected;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Pressable(
+        onTap: () {
+          Buzz.tick();
+          onChanged(id);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: on ? C.brown.withValues(alpha: .12) : C.chip,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: on ? C.brown : C.line, width: on ? 2 : 1),
+          ),
+          child: Row(children: [
+            Text(emoji, style: const TextStyle(fontSize: 15)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(13.5, FontWeight.w800, C.ink)),
+                Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(11.5, FontWeight.w700, C.muted)),
+              ]),
+            ),
+            if (on) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.check_circle, size: 20, color: C.brown),
+            ],
+          ]),
+        ),
+      ),
     );
   }
 }

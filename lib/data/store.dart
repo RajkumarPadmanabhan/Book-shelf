@@ -545,6 +545,7 @@ class AppStore extends ChangeNotifier {
     String size = 'm',
     double? x,
     double? y,
+    String? pinnedTodoId,
   }) {
     final rnd = Random();
     final r = (rnd.nextDouble() * 6.0 - 3.0);
@@ -557,6 +558,7 @@ class AppStore extends ChangeNotifier {
       isTodo: true,
       x: x ?? (15.0 + rnd.nextDouble() * 30.0),
       y: y ?? (25.0 + rnd.nextDouble() * 20.0),
+      pinnedTodoId: pinnedTodoId,
     ));
     changed();
   }
@@ -590,18 +592,40 @@ class AppStore extends ChangeNotifier {
     changed();
   }
 
-  /// Pin [noteId] to [todoId] with the note's top-left at [offX],[offY]
-  /// relative to the todo tile's top-left corner.
-  void pinTodoStickyNote(String noteId, String todoId, double offX, double offY) {
+  /// Pin [noteId] to [todoId], placed at alignment [ax],[ay] inside the
+  /// todo tile (null = the default spot).
+  void pinTodoStickyNote(String noteId, String todoId, {double? ax, double? ay}) {
     for (final n in todoNotes) {
       if (n.id == noteId) {
         n.pinnedTodoId = todoId;
-        n.pinOffsetX = offX;
-        n.pinOffsetY = offY;
+        n.pinAx = ax;
+        n.pinAy = ay;
         changed();
         break;
       }
     }
+  }
+
+  /// Frees every note pinned to [todoId] (e.g. when that to-do is deleted).
+  void unpinNotesOf(String todoId) {
+    for (final n in todoNotes) {
+      if (n.pinnedTodoId == todoId) {
+        n.pinnedTodoId = null;
+        n.pinAx = null;
+        n.pinAy = null;
+      }
+    }
+  }
+
+  /// The To-do page order: open first (starred, then by due date, then
+  /// newest), then done (most recently done first).
+  int todoOrder(Todo a, Todo b) {
+    int key(Todo t) => t.due ?? (1 << 52);
+    if (a.done != b.done) return a.done ? 1 : -1;
+    if (a.done) return (b.doneAt ?? 0).compareTo(a.doneAt ?? 0);
+    if (a.starred != b.starred) return a.starred ? -1 : 1;
+    final d = key(a).compareTo(key(b));
+    return d != 0 ? d : b.createdAt.compareTo(a.createdAt);
   }
 
   /// Remove the pin so the note floats freely again (keeps its current x/y).
@@ -609,8 +633,8 @@ class AppStore extends ChangeNotifier {
     for (final n in todoNotes) {
       if (n.id == noteId) {
         n.pinnedTodoId = null;
-        n.pinOffsetX = null;
-        n.pinOffsetY = null;
+        n.pinAx = null;
+        n.pinAy = null;
         changed();
         break;
       }

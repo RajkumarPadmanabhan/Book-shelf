@@ -27,6 +27,21 @@ class TodoUi {
 
 const _sizes = ['big', 'small', 'small', 'wide', 'small', 'small'];
 
+/// Where a note pinned from a dialog sits on its to-do: right side, a bit low.
+const _pinDefault = Alignment(0.9, 0.35);
+
+/// The alignment that puts [note] where it is now inside [tile] (clamped in).
+Alignment _alignWithin(Rect tile, Rect note) {
+  double axis(double off, double free) => free <= 0 ? 0 : (off / free * 2 - 1).clamp(-1.0, 1.0);
+  return Alignment(axis(note.left - tile.left, tile.width - note.width), axis(note.top - tile.top, tile.height - note.height));
+}
+
+String _todoName(String id) {
+  final t = store.todos.where((t) => t.id == id).firstOrNull;
+  if (t == null) return 'the to-do';
+  return '“${t.text.length > 28 ? '${t.text.substring(0, 27)}…' : t.text}”';
+}
+
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
   @override
@@ -41,6 +56,7 @@ class _TodoScreenState extends State<TodoScreen> {
     Buzz.tick();
     String selectedColor = '#ffe27a';
     String selectedSize = 'm';
+    String? pinTo;
     final textCtrl = TextEditingController(text: '');
     openDialog((ctx) => StatefulBuilder(
           builder: (ctx, set) {
@@ -56,9 +72,10 @@ class _TodoScreenState extends State<TodoScreen> {
                     color: selectedColor,
                     ink: '#1c2f6b',
                     size: selectedSize,
+                    pinnedTodoId: pinTo,
                   );
                   Sfx.play('pop');
-                  toast('Sticky note added to To-do!');
+                  toast(pinTo == null ? 'Sticky note added to To-do!' : 'Note pinned to ${_todoName(pinTo!)}');
                   return true;
                 }),
               ],
@@ -156,6 +173,8 @@ class _TodoScreenState extends State<TodoScreen> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                TodoPinPicker(selected: pinTo, onChanged: (id) => set(() => pinTo = id)),
               ],
             );
           },
@@ -180,14 +199,7 @@ class _TodoScreenState extends State<TodoScreen> {
         _ => true,
       };
     }).toList();
-    int key(Todo t) => t.due ?? (1 << 52);
-    l.sort((a, b) {
-      if (a.done != b.done) return a.done ? 1 : -1;
-      if (a.done) return (b.doneAt ?? 0).compareTo(a.doneAt ?? 0);
-      if (a.starred != b.starred) return a.starred ? -1 : 1;
-      final d = key(a).compareTo(key(b));
-      return d != 0 ? d : b.createdAt.compareTo(a.createdAt);
-    });
+    l.sort(store.todoOrder);
     return l;
   }
 
@@ -464,6 +476,20 @@ class _FreeTodoNoteState extends State<_FreeTodoNote> {
     if (mounted) setState(() => _pinGlow = false);
   }
 
+  /// Pins to [todoId]: right where the note is if it's over that tile,
+  /// otherwise at the default spot.
+  void _pinTo(String todoId) {
+    final tile = TodoBoundsRegistry.items[todoId];
+    final box = context.findRenderObject() as RenderBox?;
+    Alignment? a;
+    if (tile != null && box != null && box.attached) {
+      final note = box.localToGlobal(Offset.zero) & box.size;
+      if (tile.contains(note.center)) a = _alignWithin(tile, note);
+    }
+    store.pinTodoStickyNote(widget.note.id, todoId, ax: a?.x, ay: a?.y);
+    toast('Note pinned to ${_todoName(todoId)}');
+  }
+
   void _showPinMenu(String todoId) {
     Sfx.play('pop');
     openDialog((ctx) => AppDialog(
@@ -480,14 +506,7 @@ class _FreeTodoNoteState extends State<_FreeTodoNote> {
           actions: [
             const Btn('Cancel'),
             Btn('📌 Pin Note', kind: Kind.pri, onTap: () {
-              // Compute offset from the todo tile's top-left
-              final tileRect = TodoBoundsRegistry.items[todoId];
-              if (tileRect != null) {
-                final offX = widget.curLeft - tileRect.left;
-                final offY = widget.curTop - tileRect.top;
-                store.pinTodoStickyNote(widget.note.id, todoId, offX, offY);
-                toast('Note pinned! It will follow the to-do item.');
-              }
+              _pinTo(todoId);
               return true;
             }),
           ],
@@ -531,6 +550,9 @@ class _FreeTodoNoteState extends State<_FreeTodoNote> {
           },
           onEdited: () => store.changed(),
           onTear: () => store.removeTodoStickyNote(note.id),
+          onPinChanged: (id) {
+            if (id != null) _pinTo(id);
+          },
         ),
       ),
     );
@@ -559,16 +581,28 @@ class _PinnedTodoNote extends StatelessWidget {
       _ => 112.0,
     };
 
-    // Hidden while its tile is scrolled away or filtered out (no target).
+    // Same alignment on both sides keeps the note inside its tile even when
+    // the tile moves or changes size. Hidden while the tile isn't on screen.
+    final align = Alignment(note.pinAx ?? _pinDefault.x, note.pinAy ?? _pinDefault.y);
     return Positioned(
       left: 0,
       top: 0,
       child: CompositedTransformFollower(
         link: TodoUi.link(note.pinnedTodoId!),
-        offset: Offset(note.pinOffsetX ?? 8.0, note.pinOffsetY ?? 8.0),
+        targetAnchor: align,
+        followerAnchor: align,
         showWhenUnlinked: false,
-        child: Builder(
-          builder: (noteCtx) => GestureDetector(
+        child: Builder(builder: (noteCtx) {
+          // Frees the note so it floats right where it is now.
+          void unpinHere() {
+            final box = noteCtx.findRenderObject() as RenderBox?;
+            final pos = box != null && box.attached ? box.localToGlobal(Offset.zero) : Offset.zero;
+            store.moveTodoStickyNote(note.id, pos.dx / mq.size.width * 100.0, pos.dy / mq.size.height * 100.0);
+            store.unpinTodoStickyNote(note.id);
+            toast('Note unpinned');
+          }
+
+          return GestureDetector(
             // Long-press to unpin
             onLongPress: () {
               Sfx.play('pop');
@@ -584,12 +618,7 @@ class _PinnedTodoNote extends StatelessWidget {
                     actions: [
                       const Btn('Cancel'),
                       Btn('Unpin', kind: Kind.pri, onTap: () {
-                        // Convert current screen pos back to % coords
-                        final box = noteCtx.findRenderObject() as RenderBox?;
-                        final pos = box != null && box.attached ? box.localToGlobal(Offset.zero) : Offset.zero;
-                        store.moveTodoStickyNote(note.id, pos.dx / mq.size.width * 100.0, pos.dy / mq.size.height * 100.0);
-                        store.unpinTodoStickyNote(note.id);
-                        toast('Note unpinned');
+                        unpinHere();
                         return true;
                       }),
                     ],
@@ -604,9 +633,17 @@ class _PinnedTodoNote extends StatelessWidget {
               enableDrag: false, // pinned notes stay put; long-press to unpin
               onEdited: () => store.changed(),
               onTear: () => store.removeTodoStickyNote(note.id),
+              onPinChanged: (id) {
+                if (id == null) {
+                  unpinHere();
+                } else {
+                  store.pinTodoStickyNote(note.id, id);
+                  toast('Note pinned to ${_todoName(id)}');
+                }
+              },
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -1084,6 +1121,7 @@ void editTodo(Todo? t) {
               Btn('Delete', kind: Kind.dng, then: () async {
                 if (await confirm('Delete this to-do?', 'It will be removed from your list. This can’t be undone.', yes: 'Delete')) {
                   store.todos.remove(t);
+                  store.unpinNotesOf(t.id);
                   store.changed();
                   Sfx.play('swoosh');
                   toast('To-do deleted');
