@@ -23,6 +23,7 @@ class Post {
   final bool mine;
   final String authorName;
   final String authorHandle;
+  final String authorUid;
   final String bookTitle;
   final String bookAuthor;
   final String? bookCover;
@@ -36,6 +37,7 @@ class Post {
     this.mine = false,
     required this.authorName,
     required this.authorHandle,
+    this.authorUid = '',
     required this.bookTitle,
     required this.bookAuthor,
     this.bookCover,
@@ -63,6 +65,7 @@ class Post {
         'mine': mine,
         'n': authorName,
         'h': authorHandle,
+        if (authorUid.isNotEmpty) 'uid': authorUid,
         'bt': bookTitle,
         'ba': bookAuthor,
         if (bookCover != null) 'bc': bookCover,

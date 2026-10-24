@@ -277,7 +277,7 @@ class AppStore extends ChangeNotifier {
     if (next.length == posts.length) {
       var same = true;
       for (var i = 0; i < next.length; i++) {
-        if (next[i].id != posts[i].id || next[i].mine != posts[i].mine || next[i].fullText != posts[i].fullText) {
+        if (next[i].id != posts[i].id || next[i].mine != posts[i].mine || next[i].authorUid != posts[i].authorUid || next[i].fullText != posts[i].fullText) {
           same = false;
           break;
         }

@@ -11,6 +11,7 @@ import '../services/posts_feed.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'author_shelves.dart';
 
 class PostsScreen extends StatefulWidget {
   const PostsScreen({super.key});
@@ -471,6 +472,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     });
   }
 
+  void _onAuthor() {
+    Buzz.tick();
+    final p = widget.post;
+    final uid = p.authorUid.isNotEmpty ? p.authorUid : (p.mine ? (PostsFeed.currentUid ?? '') : '');
+    openAuthorShelves(uid: uid, name: p.authorName);
+  }
+
   void _onLike() {
     Buzz.medium();
     Sfx.play('tap');
@@ -552,28 +560,35 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
           Row(
             children: [
               // Circular avatar
-              Container(
-                width: isGrid ? 28 : 38,
-                height: isGrid ? 28 : 38,
-                decoration: BoxDecoration(
-                  color: avatarBg,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  initial,
-                  style: TextStyle(
-                    fontFamily: F.sans,
-                    fontWeight: FontWeight.w800,
-                    fontSize: isGrid ? 13 : 16,
-                    color: Colors.white,
+              GestureDetector(
+                onTap: _onAuthor,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: isGrid ? 28 : 38,
+                  height: isGrid ? 28 : 38,
+                  decoration: BoxDecoration(
+                    color: avatarBg,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      fontFamily: F.sans,
+                      fontWeight: FontWeight.w800,
+                      fontSize: isGrid ? 13 : 16,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
-              // Name & handle
+              // Name & handle. Tap to see this reader's shelves.
               Expanded(
-                child: Column(
+                child: GestureDetector(
+                  onTap: _onAuthor,
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     RichText(
@@ -605,6 +620,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
               // Delete button if own post
