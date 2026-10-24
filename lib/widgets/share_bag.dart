@@ -3,9 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/models.dart';
 import '../data/store.dart';
-import '../screens/qr_scan_screen.dart';
 import '../services/book_qr.dart';
-import '../services/lookup.dart';
 import '../services/sfx.dart';
 import '../services/share_image.dart';
 import '../theme.dart';
@@ -197,7 +195,7 @@ void openShareBag() {
             Text(
               books.isEmpty
                   ? 'Your bag is empty. On Home, press and hold a book, then drop it on the bag. The book stays on your shelf; the bag only carries a copy of its details.'
-                  : '${plural(books.length, 'book')} ready to share. Tap Share as QR to turn them into one code a friend can scan with Shelfwise.',
+                  : '${plural(books.length, 'book')} ready to share. Tap Share as QR to turn them into one picture you can send or save.',
               style: nu(13.5, FontWeight.w600, C.muted, 1.4),
             ),
             const SizedBox(height: 12),
@@ -292,7 +290,7 @@ void openBagQr(List<Item> books) {
         ),
         const SizedBox(height: 10),
         Text(
-          'Your friend taps the scan button on Shelfwise Home and points at this code, or picks a saved picture of it from the gallery.',
+          'Share this code. The other person can save the picture.',
           textAlign: TextAlign.center,
           style: nu(12.5, FontWeight.w600, C.muted, 1.4),
         ),
@@ -313,7 +311,7 @@ void openBagQr(List<Item> books) {
             await shareCard(
               key,
               name: 'shelfwise-books-$stamp',
-              text: '${plural(books.length, 'book')} from $from on Shelfwise. Open Shelfwise, tap the scan button on Home and pick this picture to add them.',
+              text: '${plural(books.length, 'book')} from $from on Shelfwise.',
             );
             return false;
           },
@@ -387,89 +385,8 @@ class _QrCard extends StatelessWidget {
               ),
             ),
           if (books.length > shown.length) Text('+ ${books.length - shown.length} more', style: nu(12, FontWeight.w700, _soft)),
-          const SizedBox(height: 8),
-          Text('Scan with Shelfwise: Home → scan button', style: nu(11, FontWeight.w700, _soft)),
         ],
       ),
     );
-  }
-}
-
-/// The Home header's scan button: scan a friend's QR, preview the books,
-/// then add them to the Shared shelf.
-Future<void> scanSharedBooks() async {
-  final list = await scanBookQr();
-  if (list == null) return;
-  await openDialog(
-    (ctx) => AppDialog(
-      title: '📚 Books from ${list.from}',
-      maxWidth: 380,
-      children: [
-        Text('${plural(list.books.length, 'book')} shared with you. Add them to your Shared shelf?', style: nu(13.5, FontWeight.w600, C.muted, 1.4)),
-        const SizedBox(height: 12),
-        for (final b in list.books) _sharedRow(b),
-      ],
-      actions: [
-        const Btn('Cancel'),
-        Btn('Add to Shared shelf', kind: Kind.pri, then: () => _import(list)),
-      ],
-    ),
-  );
-}
-
-Widget _sharedRow(SharedBook b) => Padding(
-  padding: const EdgeInsets.only(bottom: 8),
-  child: Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: C.chip,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: C.line),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(b.title, style: nu(14.5, FontWeight.w800, C.ink)),
-        if (b.author.isNotEmpty) Text(b.author, style: nu(12.5, FontWeight.w700, C.muted)),
-        if (b.rating > 0 || b.isbn.isNotEmpty) ...[
-          const SizedBox(height: 3),
-          Text(
-            [if (b.rating > 0) '${'★' * b.rating}${'☆' * (5 - b.rating)}', if (b.isbn.isNotEmpty) 'ISBN ${b.isbn}'].join('  ·  '),
-            style: nu(11.5, FontWeight.w700, C.brown),
-          ),
-        ],
-        if (b.desc.isNotEmpty) ...[
-          const SizedBox(height: 5),
-          Text(b.desc, maxLines: 4, overflow: TextOverflow.ellipsis, style: nu(12.5, FontWeight.w600, C.body, 1.35)),
-        ],
-      ],
-    ),
-  ),
-);
-
-void _import(BookList list) {
-  final (added, skipped) = store.addSharedBooks(list.books, from: list.from);
-  if (added.isEmpty) {
-    toast('Those books are already on your Shared shelf');
-    return;
-  }
-  Sfx.play('pop');
-  Buzz.medium();
-  toast('Added ${plural(added.length, 'book')} to your Shared shelf${skipped > 0 ? ' · $skipped already there' : ''}');
-  _fillIn(added);
-}
-
-/// Covers can't travel in a QR, so look them up by ISBN (best effort).
-Future<void> _fillIn(List<Item> items) async {
-  for (final b in items) {
-    if (b.isbn.isEmpty) continue;
-    try {
-      final info = await lookupIsbn(b.isbn);
-      if (info == null) continue;
-      if (info.cover != null && b.cover == null) b.cover = await store.saveImage(info.cover!);
-      if (b.desc.isEmpty && info.desc.isNotEmpty) b.desc = info.desc;
-      store.changed();
-    } catch (_) {}
   }
 }

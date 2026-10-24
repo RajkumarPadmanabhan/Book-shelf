@@ -1,28 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'firebase_boot.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../widgets/common.dart';
 
-/// Web client from android/app/google-services.json (client_type 3).
-/// Google uses it to issue an ID token Firebase can check.
 const _serverClientId = '141186279089-if8jbplpe8te6to703g85rlqbma92u9a.apps.googleusercontent.com';
-
-const _firebaseOptions = FirebaseOptions(
-  apiKey: 'AIzaSyBurou8ZZz6zwcSngiRgc4yQF8HZxnmIkY',
-  appId: '1:141186279089:android:165e571a1fb55956a76490',
-  messagingSenderId: '141186279089',
-  projectId: 'shelfwise-89cdf',
-  storageBucket: 'shelfwise-89cdf.firebasestorage.app',
-);
 
 bool _googleReady = false;
 Future<String?>? _inFlight;
 
 Future<void> _ensureSignIn() async {
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: _firebaseOptions);
-  }
+  await ensureFirebase();
   if (_googleReady) return;
   await GoogleSignIn.instance.initialize(serverClientId: _serverClientId);
   _googleReady = true;

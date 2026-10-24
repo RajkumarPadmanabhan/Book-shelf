@@ -10,6 +10,7 @@ import 'screens/shell.dart';
 import 'screens/splash.dart';
 import 'screens/tour.dart';
 import 'services/notify.dart';
+import 'services/posts_feed.dart';
 import 'services/sfx.dart';
 import 'services/updater.dart';
 import 'theme.dart';
@@ -22,6 +23,7 @@ Future<void> main() async {
   await store.load();
   Look.apply();
   runApp(const ShelfwiseApp());
+  unawaited(PostsFeed.start());
   unawaited(Notifier.init());
   if (store.settings.autoUpdate) Future.delayed(const Duration(seconds: 4), () => Updater.check());
   Future.delayed(const Duration(seconds: 2), Sfx.warmUp);

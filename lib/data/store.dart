@@ -93,6 +93,7 @@ class AppStore extends ChangeNotifier {
   int goalYear = 0;
   int lastUpdateCheck = 0;
   List<Post> posts = [];
+  Set<String> myPostIds = {};
   Set<String> likedPosts = {};
   Set<String> savedPosts = {};
   Map<String, int> sharedPostCounts = {};
@@ -141,7 +142,8 @@ class AppStore extends ChangeNotifier {
         if (goal > 0) 'goal': goal,
         if (goal > 0) 'goalYear': goalYear,
         if (lastUpdateCheck > 0) 'lastUpdateCheck': lastUpdateCheck,
-        'posts': posts.map((p) => p.toJson()).toList(),
+        'posts': posts.where((p) => p.mine || myPostIds.contains(p.id)).map((p) => p.toJson()).toList(),
+        if (myPostIds.isNotEmpty) 'myPostIds': myPostIds.toList(),
         if (likedPosts.isNotEmpty) 'likedPosts': likedPosts.toList(),
         if (savedPosts.isNotEmpty) 'savedPosts': savedPosts.toList(),
         if (sharedPostCounts.isNotEmpty) 'sharedPostCounts': sharedPostCounts,
@@ -172,6 +174,8 @@ class AppStore extends ChangeNotifier {
         .where((p) => p.mine)
         .toList();
     posts = pList ?? [];
+    myPostIds = ((j['myPostIds'] ?? const []) as List).map((e) => '$e').toSet();
+    myPostIds.addAll(posts.where((p) => p.mine).map((p) => p.id));
     likedPosts = ((j['likedPosts'] ?? const []) as List).cast<String>().toSet();
     savedPosts = ((j['savedPosts'] ?? const []) as List).cast<String>().toSet();
     sharedPostCounts = ((j['sharedPostCounts'] ?? const {}) as Map).map((k, v) => MapEntry('$k', (v as num).toInt()));
@@ -262,6 +266,28 @@ class AppStore extends ChangeNotifier {
   }
 
   // ---------- posts ----------
+  bool ownsPost(String id) => myPostIds.contains(id);
+
+  /// Replaces Explore with the shared feed, keeping this phone's posts that
+  /// have not reached the server yet.
+  void applySharedPosts(List<Post> remote) {
+    final remoteIds = remote.map((p) => p.id).toSet();
+    final pending = posts.where((p) => myPostIds.contains(p.id) && !remoteIds.contains(p.id)).toList();
+    final next = [...remote, ...pending]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    if (next.length == posts.length) {
+      var same = true;
+      for (var i = 0; i < next.length; i++) {
+        if (next[i].id != posts[i].id || next[i].mine != posts[i].mine || next[i].fullText != posts[i].fullText) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return;
+    }
+    posts = next;
+    changed();
+  }
+
   bool isPostLiked(String id) => likedPosts.contains(id);
   bool isPostSaved(String id) => savedPosts.contains(id);
   int postLikes(Post p) => p.likeCount + (isPostLiked(p.id) ? 1 : 0);
@@ -296,6 +322,7 @@ class AppStore extends ChangeNotifier {
 
   void deletePost(String id) {
     posts.removeWhere((p) => p.id == id);
+    myPostIds.remove(id);
     likedPosts.remove(id);
     savedPosts.remove(id);
     sharedPostCounts.remove(id);
@@ -324,6 +351,7 @@ class AppStore extends ChangeNotifier {
       items: items,
     );
     posts.insert(0, newPost);
+    myPostIds.add(newPost.id);
     changed();
     return newPost;
   }
@@ -931,12 +959,7 @@ class AppStore extends ChangeNotifier {
     if (sample) {
       _seedSample();
     } else {
-      cols = [
-        Collection(name: 'Reading now', emoji: '📖', items: [Item.decor('lamp')]),
-        Collection(name: 'Want to read', emoji: '🔖', items: [Item.decor('pot')]),
-        Collection(name: 'Favourites', emoji: '⭐', items: [Item.decor('candle')]),
-      ];
-      // Actual library starts clean with no dummy to-dos
+      cols = [];
       todos = [];
       todoNotes = [];
     }

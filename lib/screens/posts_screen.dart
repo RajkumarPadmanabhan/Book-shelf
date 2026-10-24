@@ -7,6 +7,7 @@ import '../data/models.dart';
 import '../data/posts_models.dart';
 import '../data/store.dart';
 import '../icons.dart';
+import '../services/posts_feed.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -506,6 +507,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
   void _onDelete() {
     Buzz.medium();
     store.deletePost(widget.post.id);
+    PostsFeed.remove(widget.post.id);
     widget.onDeleted();
     toast('Post deleted');
   }
@@ -1053,6 +1055,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
       bookCover: _selectedBook!.cover,
       items: List.of(_selectedPieces),
     );
+    PostsFeed.publish(newPost);
     Navigator.of(context).pop(newPost);
   }
 

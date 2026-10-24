@@ -98,13 +98,19 @@ class _AddBookScreenState extends State<AddBookScreen> with SingleTickerProvider
     if (!mounted) return;
     setState(() {
       _copy = c;
-      if (_title.text.trim().isEmpty) _title.text = c.suggestedTitle;
-      if (_author.text.trim().isEmpty && c.author.isNotEmpty) _author.text = c.author;
-      if (_desc.text.trim().isEmpty && c.desc.isNotEmpty) _desc.text = c.desc.length > 240 ? '${c.desc.substring(0, 237)}…' : c.desc;
+      if (_title.text.trim().isEmpty) _title.text = _clip(c.suggestedTitle, 160);
+      if (_author.text.trim().isEmpty && c.author.isNotEmpty) _author.text = _clip(c.author, 80);
+      if (_desc.text.trim().isEmpty && c.desc.isNotEmpty) _desc.text = _clip(c.desc, 240);
       _cover ??= cover;
     });
     Sfx.play('pop');
     toast(c.isEpub ? 'EPUB attached' : 'PDF attached · ${plural(c.pages, 'page')}');
+  }
+
+  String _clip(String value, int max) {
+    final t = value.trim();
+    if (t.length <= max) return t;
+    return t.substring(0, max);
   }
 
   Future<void> _scan() async {
@@ -127,9 +133,9 @@ class _AddBookScreenState extends State<AddBookScreen> with SingleTickerProvider
     if (!mounted) return;
     setState(() {
       _looking = false;
-      _title.text = info.title;
-      if (info.author.isNotEmpty) _author.text = info.author;
-      if (info.desc.isNotEmpty) _desc.text = info.desc;
+      _title.text = _clip(info.title, 160);
+      if (info.author.isNotEmpty) _author.text = _clip(info.author, 80);
+      if (info.desc.isNotEmpty) _desc.text = _clip(info.desc, 240);
       if (cover != null) _cover = cover;
     });
     Sfx.play('pop');
@@ -284,11 +290,11 @@ class _AddBookScreenState extends State<AddBookScreen> with SingleTickerProvider
                 builder: (_, c) => Transform.translate(offset: Offset(sin(_shake.value * pi * 6) * 8 * (1 - _shake.value), 0), child: c),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   _label('Title'),
-                  AppInput(_title, 'e.g. The Hobbit', caps: TextCapitalization.words),
+                  AppInput(_title, 'e.g. The Hobbit', maxLength: 160, caps: TextCapitalization.words),
                 ]),
               ),
               _label('Author'),
-              AppInput(_author, 'e.g. J. R. R. Tolkien', maxLength: 40, caps: TextCapitalization.words),
+              AppInput(_author, 'e.g. J. R. R. Tolkien', maxLength: 80, caps: TextCapitalization.words),
               _label('What is it about? (optional)'),
               AppInput(_desc, 'A line or two so future-you remembers', maxLength: 240, lines: 3),
               _label('Your copy (optional)'),

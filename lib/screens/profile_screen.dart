@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../art.dart';
 import '../data/models.dart';
 import '../data/posts_models.dart';
+import '../services/posts_feed.dart';
 import '../data/store.dart';
 import '../icons.dart';
 import '../services/notify.dart';
@@ -684,6 +685,7 @@ Widget _profilePostCard(BuildContext context, Post p) {
                   actions: [
                     Btn('Delete', kind: Kind.dng, onTap: () {
                       store.deletePost(p.id);
+                      PostsFeed.remove(p.id);
                       toast('Post deleted');
                       return true;
                     }),

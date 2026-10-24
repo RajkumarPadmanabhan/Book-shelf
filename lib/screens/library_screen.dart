@@ -292,10 +292,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         const SizedBox(width: 8),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          if (home) ...[
-            BadgeButton(icon: Ic.qr, count: 0, label: 'Scan shared books', onTap: scanSharedBooks),
-            const SizedBox(width: 10),
-          ],
           const BellButton(),
           const SizedBox(width: 10),
           BadgeButton(icon: Ic.gift, count: store.unclaimed.length, label: 'Rewards', onTap: () => openRewards()),
