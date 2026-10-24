@@ -24,7 +24,7 @@ A cozy bookshelf and reading to-do app for Android, built with Flutter.
 - **Stats & Rewind.** See this month, this year or all time. Rewind plays a story-style recap you can share or save as an image, and your stats can be shared as a card.
 - **Make it yours.** Light, dark or follow your phone; five accent colours; Nunito, Inter or Lora; three text sizes.
 - **Rewards.** Milestones unlock badges, with confetti.
-- **100% local.** No account, no ads. The internet is only used to check for updates and to look up books you scan or are shared with you. Use **Settings → Share backup** to save a backup, and **Settings → Import backup** on a new phone. Turn on **Include book files** to put your PDFs and EPUBs in the backup as a `.zip`.
+- **On your phone.** No ads. Continue with Google uses the Google account already on the phone. The internet is also used to check for updates and to look up books you scan or are shared with you. Use **Settings → Share backup** to save a backup, and **Settings → Import backup** on a new phone. Turn on **Include book files** to put your PDFs and EPUBs in the backup as a `.zip`.
 - **Updates.** Shelfwise checks GitHub for new releases and installs them for you.
 
 ## Build

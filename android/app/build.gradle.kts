@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 
 // Release signing: android/key.properties (git-ignored) points at the upload keystore.
@@ -45,6 +46,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            // The machine debug certificate is shared by every other app
+            // built on this computer. Use the Shelfwise key when it is present
+            // so this app's SHA fingerprint stays its own.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
