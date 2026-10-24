@@ -3,9 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /posts/{id} {
       allow read: if true;
-      allow create: if true;
-      allow delete: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
       allow update: if false;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
     }
   }
 }

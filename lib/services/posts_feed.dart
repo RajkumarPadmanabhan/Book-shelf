@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/posts_models.dart';
@@ -45,9 +46,15 @@ class PostsFeed {
   static Future<void> publish(Post post) async {
     try {
       await ensureFirebase();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) {
+        debugPrint('Could not share post ${post.id}: not signed in');
+        return;
+      }
       final data = post.toJson()
         ..['mine'] = false
-        ..remove('bc');
+        ..remove('bc')
+        ..['uid'] = uid;
       await FirebaseFirestore.instance.collection('posts').doc(post.id).set(data);
     } catch (e) {
       debugPrint('Could not share post ${post.id}: $e');

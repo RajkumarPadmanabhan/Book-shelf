@@ -18,7 +18,7 @@ A cozy bookshelf and reading to-do app for Android, built with Flutter.
 - **Decorations you can play with.** Lamps switch on, candles light, the owl flies off and comes back, clocks ring and ducks squeak. All sounds are synthesised in the app.
 - **Scan to add.** Point the camera at a barcode and the title, author, description and cover are filled in from Open Library (Google Books as fallback). You can also type the ISBN.
 - **Share by QR.** On Home, long-press a book and drop it on the share bag (the book stays on its shelf). Tap the bag to see what's in it and share everything as one QR picture, to any app or saved to Photos.
-- **Explore.** A post you write is shared, so other people using Shelfwise can see it. Pick your words offers ready-made lines and words.
+- **Explore.** A post you write is shared, so other people using Shelfwise can see it. Only the account that posted can delete it, and a post cannot be edited. Pick your words offers ready-made lines and words.
 - **Read your own PDFs & EPUBs.** Pages curl over like paper when you drag a corner. Pinch or double-tap to zoom in place; while zoomed, swipe past the edge for the next page. EPUBs are typeset at the text size you choose. Bookmarks, page notes, and Shelfwise remembers where you stopped.
 - **Reading time & goals.** Time spent in the reader is counted (it pauses when you're idle), and you can set a yearly book goal. Rate books with stars.
 - **Reading to-do list.** Bento-style cards with due dates, reminders, stars, hashtags and a linked book.
