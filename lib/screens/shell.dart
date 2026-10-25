@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../data/models.dart';
 import '../data/store.dart';
 import '../icons.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/pet_overlay.dart';
 import 'library_screen.dart';
 import 'onboarding.dart';
@@ -23,6 +27,97 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0; // 0 home, 1 library, 2 to-do, 3 stats, 4 settings, 5 profile, 6 explore
+  Timer? _todoTimer;
+  bool _planningTodo = false;
+  bool _todoPopupOpen = false;
+  static final Set<String> _alertedTodoIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    store.addListener(_scheduleTodoPopup);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleTodoPopup());
+  }
+
+  @override
+  void dispose() {
+    _todoTimer?.cancel();
+    store.removeListener(_scheduleTodoPopup);
+    super.dispose();
+  }
+
+  void _scheduleTodoPopup() {
+    if (_planningTodo) return;
+    _planningTodo = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _planningTodo = false;
+      if (mounted) _planTodoPopup();
+    });
+  }
+
+  void _planTodoPopup() {
+    _todoTimer?.cancel();
+    _todoTimer = null;
+    if (!store.settings.reminders || _todoPopupOpen) return;
+    final now = DateTime.now();
+    Todo? dueNow;
+    DateTime? next;
+    for (final t in store.todos) {
+      if (t.done || !t.reminds || _alertedTodoIds.contains(t.id)) continue;
+      final due = t.dueAt!;
+      final windowStart = due.subtract(const Duration(hours: 1));
+      final windowEnd = due.add(const Duration(minutes: 20));
+      if (!now.isBefore(windowStart) && now.isBefore(windowEnd)) {
+        dueNow ??= t;
+        continue;
+      }
+      if (windowStart.isAfter(now) && (next == null || windowStart.isBefore(next))) next = windowStart;
+    }
+    if (dueNow != null) {
+      _showTodoPopup(dueNow);
+      return;
+    }
+    if (next != null) {
+      var wait = next.difference(now) + const Duration(seconds: 1);
+      if (wait.isNegative) wait = const Duration(seconds: 1);
+      _todoTimer = Timer(wait, _planTodoPopup);
+    }
+  }
+
+  void _showTodoPopup(Todo target) {
+    _alertedTodoIds.add(target.id);
+    _todoPopupOpen = true;
+    final due = target.dueAt!;
+    final mins = due.difference(DateTime.now()).inMinutes;
+    final when = mins > 1
+        ? 'Starts in $mins min · ${fmtDue(due)}'
+        : mins >= 0
+            ? 'Starting now · ${fmtDue(due)}'
+            : 'Due ${fmtDue(due)}';
+    openDialog((_) => AppDialog(
+          title: '⏰ To-do reminder',
+          children: [
+            Text(target.text, style: nu(16, FontWeight.w800, C.ink, 1.3)),
+            if (target.book.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('📖 ${target.book}', style: nu(13, FontWeight.w600, C.muted)),
+              ),
+            const SizedBox(height: 6),
+            Text(when, style: nu(12, FontWeight.w600, C.muted)),
+          ],
+          actions: [
+            Btn('Skip', kind: Kind.normal, onTap: () => true),
+            Btn('OK', kind: Kind.pri, onTap: () {
+              go(2);
+              return true;
+            }),
+          ],
+        )).whenComplete(() {
+      _todoPopupOpen = false;
+      if (mounted) _planTodoPopup();
+    });
+  }
 
   void go(int t) {
     dropFocus();

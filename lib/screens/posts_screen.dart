@@ -10,8 +10,10 @@ import '../icons.dart';
 import '../services/posts_feed.dart';
 import '../services/sfx.dart';
 import '../theme.dart';
+import '../widgets/book_cover.dart';
 import '../widgets/common.dart';
 import 'author_shelves.dart';
+import 'library_screen.dart';
 
 class PostsScreen extends StatefulWidget {
   const PostsScreen({super.key});
@@ -497,7 +499,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
   void _onShare() async {
     Buzz.tick();
     final p = widget.post;
-    final text = '“${p.fullText}” — ${p.authorName} on ${p.bookTitle} by ${p.bookAuthor} · Readers';
+    final titles = p.books.map((b) => b.author.trim().isEmpty ? b.title : '${b.title} by ${b.author}').join(', ');
+    final text = '“${p.fullText}” — ${p.authorName} on ${titles.isEmpty ? p.booksLabel : titles} · Readers';
 
     try {
       final res = await Share.share(text);
@@ -526,8 +529,6 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     final isGrid = widget.isGrid;
     final isLiked = store.isPostLiked(p.id);
     final isSaved = store.isPostSaved(p.id);
-    final likes = store.postLikes(p);
-    final shares = store.postShares(p);
 
     final avatarBg = avatarColorFor(p.authorHandle);
     final initial = p.authorName.isNotEmpty ? p.authorName[0].toUpperCase() : 'R';
@@ -647,19 +648,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
 
           // Content row / Grid view content
           if (isGrid) ...[
-            // In Grid mode: Cover is hidden, book title shown in bold
-            Text(
-              p.bookTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: F.sans,
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                height: 1.25,
-                color: C.ink,
-              ),
-            ),
+            _PostBooks(post: p, compact: true),
             const SizedBox(height: 6),
             Expanded(
               child: SingleChildScrollView(
@@ -672,7 +661,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildBookCover(p),
+                _PostBooks(post: p, compact: false),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Padding(
@@ -714,16 +703,6 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                           size: isGrid ? 18 : 20,
                           color: isLiked ? const Color(0xFFD1344A) : C.muted,
                           fill: isLiked ? const Color(0xFFD1344A) : null,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '$likes',
-                        style: TextStyle(
-                          fontFamily: F.sans,
-                          fontWeight: FontWeight.w700,
-                          fontSize: isGrid ? 12 : 13,
-                          color: isLiked ? const Color(0xFFD1344A) : C.muted,
                         ),
                       ),
                     ],
@@ -784,16 +763,6 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                         size: isGrid ? 18 : 20,
                         color: C.muted,
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '$shares',
-                        style: TextStyle(
-                          fontFamily: F.sans,
-                          fontWeight: FontWeight.w700,
-                          fontSize: isGrid ? 12 : 13,
-                          color: C.muted,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -824,90 +793,6 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     }
 
     return cardContent;
-  }
-
-  Widget _buildBookCover(Post p) {
-    // Check if uploaded cover exists
-    final imgName = p.bookCover;
-    final file = imgName != null ? store.imageFile(imgName) : null;
-    final hasImg = file != null && file.existsSync();
-
-    if (hasImg) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 52,
-          height: 74,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE9DCC0),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Image.file(file, fit: BoxFit.cover),
-        ),
-      );
-    }
-
-    // Generated spine cover tile
-    final pal = coverFor(p.bookTitle.isEmpty ? 'Untitled' : p.bookTitle);
-    return Container(
-      width: 46,
-      height: 64,
-      decoration: BoxDecoration(
-        color: pal[0],
-        borderRadius: BorderRadius.circular(4),
-        border: pal.length > 2 ? Border(top: BorderSide(color: pal[2], width: 4)) : null,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x4D000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            p.bookTitle,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: F.sans,
-              fontWeight: FontWeight.w700,
-              fontSize: 8.5,
-              height: 1.1,
-              color: pal[1],
-            ),
-          ),
-          if (p.bookAuthor.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Opacity(
-              opacity: 0.85,
-              child: Text(
-                p.bookAuthor,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: F.sans,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 7,
-                  color: pal[1],
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
   }
 
   Widget _buildPostText(Post p, {required bool isGrid}) {
@@ -958,6 +843,50 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
 
     return RichText(
       text: TextSpan(children: spans),
+    );
+  }
+}
+
+class _PostBooks extends StatelessWidget {
+  final Post post;
+  final bool compact;
+  const _PostBooks({required this.post, required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final books = post.books;
+    if (books.isEmpty) return const SizedBox.shrink();
+    final w = compact ? 34.0 : 46.0;
+    final h = compact ? 48.0 : 66.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < books.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Semantics(
+            button: true,
+            label: '${books[i].title}${books[i].author.isEmpty ? '' : ' by ${books[i].author}'}',
+            child: GestureDetector(
+              onTap: () {
+                Buzz.tick();
+                openPostBook(books[i], sharedBy: post.authorName);
+              },
+              child: CoverFace(
+                title: books[i].title,
+                author: books[i].author,
+                image: books[i].cover,
+                w: w,
+                h: h,
+                titleSize: compact ? 7 : 8.5,
+                authorSize: compact ? 6 : 7,
+                titleLines: 3,
+                topBorder: 3,
+                spine: 5,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1026,7 +955,7 @@ class _ComposerSheet extends StatefulWidget {
 }
 
 class _ComposerSheetState extends State<_ComposerSheet> {
-  Item? _selectedBook;
+  final List<Item> _selectedBooks = [];
   final List<PostItem> _selectedPieces = [];
   String _activeTab = 'l'; // 'l' = Lines, 'w' = Words
 
@@ -1062,13 +991,28 @@ class _ComposerSheetState extends State<_ComposerSheet> {
     });
   }
 
+  void _toggleBook(Item b) {
+    Buzz.tick();
+    setState(() {
+      final index = _selectedBooks.indexWhere((s) => s.id == b.id);
+      if (index >= 0) {
+        _selectedBooks.removeAt(index);
+      } else if (_selectedBooks.length >= 3) {
+        toast('You can add up to 3 books');
+      } else {
+        _selectedBooks.add(b);
+      }
+    });
+  }
+
   void _onPost() {
-    if (_selectedBook == null || _selectedPieces.isEmpty) return;
+    if (_selectedBooks.isEmpty || _selectedPieces.isEmpty) return;
     Buzz.medium();
     final newPost = store.addPost(
-      bookTitle: _selectedBook!.title,
-      bookAuthor: _selectedBook!.author,
-      bookCover: _selectedBook!.cover,
+      books: [
+        for (final b in _selectedBooks)
+          PostBook(title: b.title, author: b.author, cover: b.cover, desc: b.desc),
+      ],
       items: List.of(_selectedPieces),
     );
     PostsFeed.publish(newPost);
@@ -1095,7 +1039,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
         ? shelfBooks
         : shelfBooks.where((b) => '${b.title} ${b.author}'.toLowerCase().contains(bq)).toList();
 
-    final canPost = _selectedBook != null && _selectedPieces.isNotEmpty;
+    final canPost = _selectedBooks.isNotEmpty && _selectedPieces.isNotEmpty;
 
     return Container(
       constraints: BoxConstraints(
@@ -1173,7 +1117,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          '1 · Which book?',
+                          '1 · Which books?',
                           style: TextStyle(
                             fontFamily: F.hand,
                             fontWeight: FontWeight.w700,
@@ -1265,16 +1209,13 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                         itemCount: filteredBooks.length,
                         itemBuilder: (context, i) {
                           final b = filteredBooks[i];
-                          final isSelected = _selectedBook == b;
+                          final isSelected = _selectedBooks.any((s) => s.id == b.id);
                           return Padding(
                             padding: const EdgeInsets.only(right: 10, top: 6, bottom: 6),
                             child: _BookPickerTile(
                               book: b,
                               selected: isSelected,
-                              onTap: () {
-                                Buzz.tick();
-                                setState(() => _selectedBook = b);
-                              },
+                              onTap: () => _toggleBook(b),
                             ),
                           );
                         },
@@ -1285,14 +1226,16 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4, bottom: 12),
                     child: Text(
-                      _selectedBook != null
-                          ? '${_selectedBook!.title}${_selectedBook!.author.isNotEmpty ? ' · ${_selectedBook!.author}' : ''}'
-                          : (shelfBooks.isNotEmpty ? 'Pick a book from your shelf (${shelfBooks.length})' : 'Pick a book'),
+                      _selectedBooks.isNotEmpty
+                          ? '${_selectedBooks.length} of 3 · ${_selectedBooks.map((b) => b.title).join(' · ')}'
+                          : (shelfBooks.isNotEmpty ? 'Pick up to 3 books (${shelfBooks.length} on your shelves)' : 'Pick up to 3 books'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: F.sans,
                         fontSize: 13,
-                        color: _selectedBook != null ? C.brown : C.muted,
-                        fontWeight: _selectedBook != null ? FontWeight.w600 : FontWeight.normal,
+                        color: _selectedBooks.isNotEmpty ? C.brown : C.muted,
+                        fontWeight: _selectedBooks.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                   ),

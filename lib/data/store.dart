@@ -277,7 +277,7 @@ class AppStore extends ChangeNotifier {
     if (next.length == posts.length) {
       var same = true;
       for (var i = 0; i < next.length; i++) {
-        if (next[i].id != posts[i].id || next[i].mine != posts[i].mine || next[i].authorUid != posts[i].authorUid || next[i].fullText != posts[i].fullText) {
+        if (next[i].id != posts[i].id || next[i].mine != posts[i].mine || next[i].authorUid != posts[i].authorUid || next[i].fullText != posts[i].fullText || next[i].booksLabel != posts[i].booksLabel) {
           same = false;
           break;
         }
@@ -330,9 +330,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Post addPost({
-    required String bookTitle,
-    required String bookAuthor,
-    String? bookCover,
+    required List<PostBook> books,
     required List<PostItem> items,
   }) {
     final myName = profile.name.trim().isNotEmpty ? profile.name.trim() : 'Alex Reader';
@@ -342,9 +340,7 @@ class AppStore extends ChangeNotifier {
       mine: true,
       authorName: myName,
       authorHandle: myHandle,
-      bookTitle: bookTitle,
-      bookAuthor: bookAuthor,
-      bookCover: bookCover,
+      books: books.take(3).toList(),
       timestamp: DateTime.now().millisecondsSinceEpoch,
       likeCount: 0,
       shareCount: 0,
@@ -746,11 +742,45 @@ class AppStore extends ChangeNotifier {
     return DateTime(n.year, n.month, n.day, 23, 59, 59);
   }
 
-  /// Open to-dos due today or earlier.
-  List<Todo> get dueTodos => todos.where((t) => !t.done && t.due != null && t.due! <= endOfToday().millisecondsSinceEpoch).toList()
-    ..sort((a, b) => a.due!.compareTo(b.due!));
+  /// Open to-dos due today or earlier. A date with no time counts for the day, not at midnight.
+  List<Todo> get dueTodos => todos.where(_countsAsDue).toList()..sort((a, b) => a.due!.compareTo(b.due!));
 
-  bool isOverdue(Todo t) => !t.done && t.due != null && t.due! < DateTime.now().millisecondsSinceEpoch;
+  bool _countsAsDue(Todo t) {
+    if (t.done || t.due == null) return false;
+    final d = t.dueAt!;
+    if (!t.timed) {
+      final dayEnd = DateTime(d.year, d.month, d.day, 23, 59, 59);
+      return !dayEnd.isAfter(endOfToday());
+    }
+    return t.due! <= endOfToday().millisecondsSinceEpoch;
+  }
+
+  bool isOverdue(Todo t) {
+    if (t.done || t.due == null) return false;
+    final d = t.dueAt!;
+    if (!t.timed) {
+      final dayEnd = DateTime(d.year, d.month, d.day, 23, 59, 59);
+      return DateTime.now().isAfter(dayEnd);
+    }
+    return d.isBefore(DateTime.now());
+  }
+
+  /// Moves a shelf up (delta -1) or down (delta 1). Home reads the same list.
+  void moveCollection(Collection c, int delta) {
+    final i = cols.indexOf(c);
+    final j = i + delta;
+    if (i < 0 || j < 0 || j >= cols.length) return;
+    cols.removeAt(i);
+    cols.insert(j, c);
+    changed();
+  }
+
+  void setCollectionOrder(List<Collection> next) {
+    cols
+      ..clear()
+      ..addAll(next);
+    changed();
+  }
 
   void toggleTodo(Todo t) {
     t.done = !t.done;
@@ -1150,8 +1180,8 @@ class AppStore extends ChangeNotifier {
     mystery.subOn = true;
     headings = ['Favourites'];
     todos = [
-      Todo(text: 'Finish the last 80 pages of The Name of the Wind before Sunday', book: 'The Name of the Wind', tags: ['fantasy', 'weekend'], due: DateTime(now.year, now.month, now.day, 20).millisecondsSinceEpoch, starred: true),
-      Todo(text: 'Return Rebecca to the library', book: 'Rebecca', tags: ['errand'], due: DateTime(now.year, now.month, now.day + 2, 18).millisecondsSinceEpoch),
+      Todo(text: 'Finish the last 80 pages of The Name of the Wind before Sunday', book: 'The Name of the Wind', tags: ['fantasy', 'weekend'], due: DateTime(now.year, now.month, now.day, 20).millisecondsSinceEpoch, timed: true, starred: true),
+      Todo(text: 'Return Rebecca to the library', book: 'Rebecca', tags: ['errand'], due: DateTime(now.year, now.month, now.day + 2, 18).millisecondsSinceEpoch, timed: true),
       Todo(text: 'Pick next month’s book club read', tags: ['bookclub']),
       Todo(text: 'Write three lines about Piranesi while it’s fresh', book: 'Piranesi', tags: ['notes']),
       Todo(text: 'Read 20 minutes before bed', tags: ['habit']),

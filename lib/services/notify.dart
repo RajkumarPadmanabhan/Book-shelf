@@ -82,57 +82,35 @@ class Notifier {
     if (!_ready) return;
     final s = store.settings;
     final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final openTodos = s.reminders ? store.todos.where((t) => !t.done).toList() : <Todo>[];
-    final sig = '${s.dailyNudge}|${openTodos.map((t) => '${t.id}:${t.due}:${t.text}').join(',')}';
+    final openTodos = s.reminders ? store.todos.where((t) => !t.done && t.reminds).toList() : <Todo>[];
+    final sig = '${s.reminders}|${s.dailyNudge}|${openTodos.map((t) => '${t.id}:${t.due}:${t.timed}:${t.text}').join(',')}';
     if (sig == _sig) return;
     _sig = sig;
     try {
       await _plugin.cancelAllPendingNotifications();
       var id = 100;
       for (final t in openTodos.take(60)) {
-        if (t.due != null && t.dueAt != null) {
-          final dueAt = t.dueAt!;
-          final oneHourBefore = dueAt.subtract(const Duration(hours: 1));
-          // 1 hour before reminder
-          if (oneHourBefore.isAfter(now)) {
-            await _plugin.zonedSchedule(
-              id: id++,
-              scheduledDate: tz.TZDateTime.from(oneHourBefore, tz.local),
-              notificationDetails: _todoDetails,
-              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-              title: '⏰ Starting in 1 hr',
-              body: '${t.text} starts in 1 hr',
-            );
-          }
-          // At due time
-          if (dueAt.isAfter(now)) {
-            await _plugin.zonedSchedule(
-              id: id++,
-              scheduledDate: tz.TZDateTime.from(dueAt, tz.local),
-              notificationDetails: _todoDetails,
-              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-              title: t.book.isEmpty ? 'To-do reminder' : '📖 ${t.book}',
-              body: t.text,
-            );
-          }
-        } else {
-          // If user didn't click 'due' button, schedule a reminder for today
-          final created = DateTime.fromMillisecondsSinceEpoch(t.createdAt);
-          if (created.isAfter(todayStart)) {
-            var remindAt = created.add(const Duration(hours: 1));
-            if (!remindAt.isAfter(now)) {
-              remindAt = now.add(const Duration(hours: 1));
-            }
-            await _plugin.zonedSchedule(
-              id: id++,
-              scheduledDate: tz.TZDateTime.from(remindAt, tz.local),
-              notificationDetails: _todoDetails,
-              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-              title: 'To-do reminder',
-              body: '${t.text} starts in 1 hr',
-            );
-          }
+        final dueAt = t.dueAt!;
+        final oneHourBefore = dueAt.subtract(const Duration(hours: 1));
+        if (oneHourBefore.isAfter(now)) {
+          await _plugin.zonedSchedule(
+            id: id++,
+            scheduledDate: tz.TZDateTime.from(oneHourBefore, tz.local),
+            notificationDetails: _todoDetails,
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            title: '⏰ Starting in 1 hr',
+            body: '${t.text} starts in 1 hr',
+          );
+        }
+        if (dueAt.isAfter(now)) {
+          await _plugin.zonedSchedule(
+            id: id++,
+            scheduledDate: tz.TZDateTime.from(dueAt, tz.local),
+            notificationDetails: _todoDetails,
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            title: t.book.isEmpty ? 'To-do reminder' : '📖 ${t.book}',
+            body: t.text,
+          );
         }
       }
       if (s.dailyNudge) {

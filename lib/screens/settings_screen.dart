@@ -397,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Alerts',
               subtitle: 'To-do reminder notifications and evening nudge',
               child: _card([
-                _item('🔔', 'To-do reminders', sub: 'A nudge when a to-do is due or starts soon', trailing: AppSwitch(value: s.reminders, onChanged: (v) async {
+                _item('🔔', 'To-do reminders', sub: 'A popup and a phone notification when a to-do has a date and a time', trailing: AppSwitch(value: s.reminders, onChanged: (v) async {
                   if (v && !await Notifier.requestPermission()) toast('Allow notifications for Shelfwise in Android settings');
                   _set(() => s.reminders = v);
                   toast(v ? 'To-do reminders on' : 'To-do reminders off');

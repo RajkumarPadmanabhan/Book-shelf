@@ -398,7 +398,8 @@ class Todo {
   bool done;
   int createdAt;
   int? doneAt;
-  int? due; // ms since epoch
+  int? due; // ms since epoch. Midnight, with [timed] false, means a date and no clock time.
+  bool timed; // a clock time was chosen. Reminders need both a date and a time.
   String book;
   List<String> tags;
   bool starred;
@@ -411,6 +412,7 @@ class Todo {
     int? createdAt,
     this.doneAt,
     this.due,
+    this.timed = false,
     this.book = '',
     List<String>? tags,
     this.starred = false,
@@ -421,6 +423,9 @@ class Todo {
 
   DateTime? get dueAt => due == null ? null : DateTime.fromMillisecondsSinceEpoch(due!);
 
+  /// Popup and phone notification only when both a date and a time are set.
+  bool get reminds => due != null && timed;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'text': text,
@@ -428,6 +433,7 @@ class Todo {
         'at': createdAt,
         if (doneAt != null) 'doneAt': doneAt,
         if (due != null) 'due': due,
+        if (due != null) 'tm': timed,
         if (book.isNotEmpty) 'book': book,
         if (tags.isNotEmpty) 'tags': tags,
         if (starred) 'star': true,
@@ -441,6 +447,7 @@ class Todo {
         createdAt: (j['at'] as num?)?.toInt(),
         doneAt: (j['doneAt'] as num?)?.toInt(),
         due: (j['due'] as num?)?.toInt(),
+        timed: j.containsKey('tm') ? j['tm'] == true : j['due'] != null,
         book: (j['book'] ?? '') as String,
         tags: ((j['tags'] ?? const []) as List).cast<String>().toList(),
         starred: j['star'] == true,

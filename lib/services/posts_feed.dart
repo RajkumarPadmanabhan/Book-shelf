@@ -39,7 +39,7 @@ class PostsFeed {
               final data = Map<String, dynamic>.from(doc.data());
               data['id'] = doc.id;
               data['mine'] = store.ownsPost(doc.id);
-              data.remove('bc');
+              _stripCovers(data);
               remote.add(Post.fromJson(data));
             } catch (e) {
               debugPrint('Skipping a post that could not be read: $e');
@@ -72,12 +72,23 @@ class PostsFeed {
       }
       final data = post.toJson()
         ..['mine'] = false
-        ..remove('bc')
         ..['uid'] = uid;
+      _stripCovers(data);
       await FirebaseFirestore.instance.collection('posts').doc(post.id).set(data);
     } catch (e) {
       debugPrint('Could not share post ${post.id}: $e');
     }
+  }
+
+  /// Cover filenames only make sense on the phone that owns the file.
+  static void _stripCovers(Map<String, dynamic> data) {
+    data.remove('bc');
+    final books = data['books'];
+    if (books is! List) return;
+    data['books'] = [
+      for (final book in books)
+        if (book is Map) (Map<String, dynamic>.from(book)..remove('c')) else book,
+    ];
   }
 
   static Future<void> remove(String id) async {

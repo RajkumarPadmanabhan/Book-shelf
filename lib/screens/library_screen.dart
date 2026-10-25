@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../art.dart';
 import '../data/models.dart';
+import '../data/posts_models.dart';
 import '../data/store.dart';
 import '../icons.dart';
 import '../services/sfx.dart';
@@ -50,65 +51,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   bool get home => widget.home;
 
-  static final Set<String> _alertedTodoIds = {};
-
   @override
   void initState() {
     super.initState();
     if (!home) {
       Future.delayed(const Duration(milliseconds: 650), _nudge);
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpcomingTodoAlert());
     }
-  }
-
-  void _checkUpcomingTodoAlert() {
-    if (!mounted || !home) return;
-    final now = DateTime.now();
-    final todayEnd = AppStore.endOfToday();
-    final todayStart = DateTime(now.year, now.month, now.day);
-
-    final candidates = store.todos.where((t) {
-      if (t.done || _alertedTodoIds.contains(t.id)) return false;
-      if (t.due != null) {
-        final d = t.dueAt!;
-        return d.isAfter(todayStart) && d.isBefore(todayEnd.add(const Duration(hours: 1)));
-      } else {
-        final created = DateTime.fromMillisecondsSinceEpoch(t.createdAt);
-        return created.isAfter(todayStart);
-      }
-    }).toList();
-
-    if (candidates.isEmpty) return;
-    final target = candidates.first;
-    _alertedTodoIds.add(target.id);
-
-    openDialog((ctx) => AppDialog(
-          title: '⏰ To-do Reminder',
-          children: [
-            Text(
-              '${target.text} starts in 1 hr',
-              style: nu(16, FontWeight.w800, C.ink, 1.3),
-            ),
-            if (target.book.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('📖 ${target.book}', style: nu(13, FontWeight.w600, C.muted)),
-              ),
-            const SizedBox(height: 6),
-            Text(
-              target.due != null ? 'Scheduled for today (${fmtDue(target.dueAt!)})' : 'Active reading task for today',
-              style: nu(12, FontWeight.w600, C.muted),
-            ),
-          ],
-          actions: [
-            Btn('Skip', kind: Kind.normal, onTap: () => true),
-            Btn('OK', kind: Kind.pri, onTap: () {
-              widget.onTodo();
-              return true;
-            }),
-          ],
-        ));
   }
 
   @override
@@ -169,7 +117,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 _lbar(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 2, 22, 0),
-                  child: Text('Tip: press and hold a book or decoration, then drag to reorder it. Use the slider under a shelf to see every book.',
+                  child: Text('Tip: press and hold a book or decoration, then drag to reorder it. Tap Arrange to move whole shelves. Home uses that same order.',
                       style: nu(12, FontWeight.w600, C.muted, 1.35)),
                 ),
               ],
@@ -436,6 +384,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: Text('+ New Collection', style: nu(14, FontWeight.w700, C.brown)),
             ),
           ),
+          if (store.cols.length > 1) ...[
+            const SizedBox(width: 14),
+            Pressable(
+              onTap: _arrangeShelves,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text('Arrange', style: nu(14, FontWeight.w700, C.brown)),
+              ),
+            ),
+          ],
           const Spacer(),
           Semantics(
             button: true,
@@ -1129,11 +1087,92 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ]));
   }
 
+  void _arrangeShelves() {
+    if (store.cols.length < 2) {
+      toast('Add another shelf to arrange them');
+      return;
+    }
+    final order = [...store.cols];
+    openDialog((ctx) => StatefulBuilder(builder: (ctx, set) {
+          return AppDialog(
+            title: 'Arrange shelves',
+            maxWidth: 400,
+            children: [
+              const Sub('Drag a shelf by the handle. Home uses this same order.'),
+              SizedBox(
+                height: (order.length * 64.0).clamp(64.0, 320.0),
+                child: ReorderableListView.builder(
+                  padding: EdgeInsets.zero,
+                  buildDefaultDragHandles: false,
+                  itemCount: order.length,
+                  onReorder: (a, b) {
+                    set(() {
+                      if (b > a) b -= 1;
+                      final item = order.removeAt(a);
+                      order.insert(b, item);
+                    });
+                  },
+                  itemBuilder: (context, i) {
+                    final c = order[i];
+                    return Padding(
+                      key: ValueKey(c.id),
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Material(
+                        color: C.chip,
+                        borderRadius: BorderRadius.circular(12),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          title: Text('${c.emoji} ${c.name}', maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(15, FontWeight.w800)),
+                          subtitle: Text(plural(c.books.length, 'book'), style: nu(12, FontWeight.w600, C.muted)),
+                          trailing: ReorderableDragStartListener(
+                            index: i,
+                            child: Icon(Icons.drag_handle, color: C.ink),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+            actions: [
+              const Btn('Cancel'),
+              Btn('Save', kind: Kind.pri, onTap: () {
+                store.setCollectionOrder(order);
+                toast('Shelf order updated');
+                return true;
+              }),
+            ],
+          );
+        }));
+  }
+
   void _more(Collection c) {
     final n = c.books.length;
+    final i = store.cols.indexOf(c);
     openDialog((_) => AppDialog(title: c.name, children: [
           Sub('${plural(n, 'book')} in this collection'),
         ], actions: [
+          if (!home && store.cols.length > 1) ...[
+            Btn('Move up', onTap: () {
+              if (i <= 0) {
+                toast('Already at the top');
+                return false;
+              }
+              store.moveCollection(c, -1);
+              toast('Moved up. Home follows this order.');
+              return true;
+            }),
+            Btn('Move down', onTap: () {
+              if (i < 0 || i >= store.cols.length - 1) {
+                toast('Already at the bottom');
+                return false;
+              }
+              store.moveCollection(c, 1);
+              toast('Moved down. Home follows this order.');
+              return true;
+            }),
+          ],
           Btn('Rename', then: () => editCollection(c)),
           Btn('Remove entire shelf', kind: Kind.dng, then: () async {
             final ok = await confirm('Remove “${c.name}”?',
@@ -1358,6 +1397,77 @@ class _ContinueCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Shared dialogs (also used by the profile and full-screen shelf)
 // ---------------------------------------------------------------------------
+
+/// A book tapped on an Explore post: the cover pops up, then its details.
+void openPostBook(PostBook book, {required String sharedBy}) {
+  Sfx.play('pop');
+  (Collection, Item)? local;
+  final title = book.title.trim().toLowerCase();
+  final author = book.author.trim().toLowerCase();
+  for (final c in store.cols) {
+    for (final b in c.books) {
+      if (b.title.trim().toLowerCase() != title) continue;
+      if (author.isNotEmpty && b.author.trim().toLowerCase() != author) continue;
+      local = (c, b);
+      break;
+    }
+    if (local != null) break;
+  }
+  final owned = local?.$2;
+  final shelf = local?.$1;
+  final onShelf = local;
+  final desc = (owned != null && owned.desc.trim().isNotEmpty) ? owned.desc.trim() : book.desc.trim();
+  openDialog((_) => AppDialog(
+        title: book.title.isEmpty ? 'Book' : book.title,
+        children: [
+          Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.55, end: 1),
+              duration: const Duration(milliseconds: 460),
+              curve: Curves.easeOutBack,
+              builder: (_, scale, child) => Transform.scale(scale: scale, child: child),
+              child: owned != null
+                  ? BookCover(owned, w: 96, h: 136, titleSize: 12, authorSize: 9, titleLines: 5)
+                  : CoverFace(
+                      title: book.title,
+                      author: book.author,
+                      w: 96,
+                      h: 136,
+                      titleSize: 12,
+                      authorSize: 9,
+                      titleLines: 5,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (book.author.isNotEmpty) Text(book.author, style: nu(14, FontWeight.w700, C.muted)),
+          const SizedBox(height: 6),
+          Text(
+            shelf != null
+                ? 'On your ${shelf.emoji} ${shelf.name} shelf · ${owned!.finished ? 'Finished' : 'Reading'}'
+                : 'From ${sharedBy.trim().isEmpty ? 'another reader' : sharedBy}’s post',
+            style: nu(13, FontWeight.w700, C.brown, 1.35),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              desc.isEmpty ? 'No description was shared with this book.' : desc,
+              style: nu(14, FontWeight.w600, C.body, 1.45),
+            ),
+          ),
+          if (shelf == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('The book file stays on their phone.', style: nu(12, FontWeight.w600, C.muted, 1.35)),
+            ),
+        ],
+        actions: [
+          if (onShelf != null)
+            Btn('On your shelf', kind: Kind.pri, then: () => openBookView(onShelf.$1, onShelf.$2)),
+          const Btn('Close'),
+        ],
+      ));
+}
 
 /// Read-only look at a book (Home mode and profile).
 void openBookView(Collection c, Item b) {

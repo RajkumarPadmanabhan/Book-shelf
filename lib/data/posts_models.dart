@@ -18,15 +18,37 @@ class PostItem {
       );
 }
 
+/// A book attached to a post. Cover files stay on the phone that wrote the post.
+class PostBook {
+  final String title;
+  final String author;
+  final String? cover;
+  final String desc;
+
+  const PostBook({required this.title, this.author = '', this.cover, this.desc = ''});
+
+  Map<String, dynamic> toJson() => {
+        't': title,
+        'a': author,
+        if (cover != null && cover!.isNotEmpty) 'c': cover,
+        if (desc.isNotEmpty) 'd': desc,
+      };
+
+  factory PostBook.fromJson(Map<String, dynamic> j) => PostBook(
+        title: (j['t'] ?? j['bt'] ?? '').toString(),
+        author: (j['a'] ?? j['ba'] ?? '').toString(),
+        cover: (j['c'] ?? j['bc']) as String?,
+        desc: (j['d'] ?? '').toString(),
+      );
+}
+
 class Post {
   final String id;
   final bool mine;
   final String authorName;
   final String authorHandle;
   final String authorUid;
-  final String bookTitle;
-  final String bookAuthor;
-  final String? bookCover;
+  final List<PostBook> books;
   final int timestamp;
   int likeCount;
   int shareCount;
@@ -38,14 +60,21 @@ class Post {
     required this.authorName,
     required this.authorHandle,
     this.authorUid = '',
-    required this.bookTitle,
-    required this.bookAuthor,
-    this.bookCover,
+    List<PostBook>? books,
     required this.timestamp,
     this.likeCount = 0,
     this.shareCount = 0,
     required this.items,
-  });
+  }) : books = List<PostBook>.unmodifiable((books ?? const <PostBook>[]).take(3));
+
+  String get bookTitle => books.isEmpty ? '' : books.first.title;
+  String get bookAuthor => books.isEmpty ? '' : books.first.author;
+  String? get bookCover => books.isEmpty ? null : books.first.cover;
+
+  String get booksLabel {
+    final titles = books.map((b) => b.title.trim()).where((t) => t.isNotEmpty);
+    return titles.isEmpty ? 'a book' : titles.join(', ');
+  }
 
   String get fullText {
     final lines = <String>[];
@@ -69,6 +98,7 @@ class Post {
         'bt': bookTitle,
         'ba': bookAuthor,
         if (bookCover != null) 'bc': bookCover,
+        if (books.isNotEmpty) 'books': books.map((b) => b.toJson()).toList(),
         'ts': timestamp,
         'l': likeCount,
         'sh': shareCount,
@@ -80,9 +110,7 @@ class Post {
         mine: j['mine'] == true,
         authorName: (j['n'] ?? '') as String,
         authorHandle: (j['h'] ?? '') as String,
-        bookTitle: (j['bt'] ?? '') as String,
-        bookAuthor: (j['ba'] ?? '') as String,
-        bookCover: j['bc'] as String?,
+        books: _booksFrom(j),
         timestamp: (j['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
         likeCount: (j['l'] as num?)?.toInt() ?? 0,
         shareCount: (j['sh'] as num?)?.toInt() ?? 0,
@@ -90,6 +118,30 @@ class Post {
             .map((e) => PostItem.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),
       );
+
+  static List<PostBook> _booksFrom(Map<String, dynamic> j) {
+    final raw = j['books'];
+    final out = <PostBook>[];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is! Map) continue;
+        final book = PostBook.fromJson(entry.cast<String, dynamic>());
+        if (book.title.trim().isEmpty) continue;
+        out.add(book);
+        if (out.length == 3) return out;
+      }
+    }
+    if (out.isNotEmpty) return out;
+    final title = (j['bt'] ?? '').toString().trim();
+    if (title.isEmpty) return const [];
+    return [
+      PostBook(
+        title: title,
+        author: (j['ba'] ?? '').toString(),
+        cover: j['bc'] as String?,
+      ),
+    ];
+  }
 }
 
 const avatarPalette = <Color>[

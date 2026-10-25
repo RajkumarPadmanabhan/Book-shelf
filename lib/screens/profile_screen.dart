@@ -143,7 +143,7 @@ class ProfileScreen extends StatelessWidget {
             CardBox(
               pad: EdgeInsets.zero,
               child: Column(children: [
-                _switchRow('🔔', 'To-do reminders', 'A nudge when a to-do is due', store.settings.reminders, (v) async {
+                _switchRow('🔔', 'To-do reminders', 'A popup and a phone notification when a to-do has a date and a time', store.settings.reminders, (v) async {
                   if (v && !await Notifier.requestPermission()) {
                     toast('Allow notifications for Shelfwise in Android settings');
                   }
@@ -633,8 +633,7 @@ Widget _profilePostCard(BuildContext context, Post p) {
   final lines = p.items.where((i) => i.isLine).map((i) => i.text).toList();
   final words = p.items.where((i) => i.isWord).map((i) => i.text).toList();
   final timeStr = formatTimeAgo(p.timestamp);
-  final likes = store.postLikes(p);
-  final shares = store.postShares(p);
+  final books = p.books.isEmpty ? [PostBook(title: p.bookTitle, author: p.bookAuthor)] : p.books;
 
   return Container(
     margin: const EdgeInsets.only(bottom: 12),
@@ -650,24 +649,29 @@ Widget _profilePostCard(BuildContext context, Post p) {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 36,
-              height: 44,
-              decoration: BoxDecoration(
-                color: C.chip,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: C.line),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.menu_book_rounded, size: 20, color: Color(0xFFF26A21)),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(p.bookTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(14.5, FontWeight.w800, C.ink)),
-                  Text(p.bookAuthor, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(12, FontWeight.w600, C.muted)),
+                  for (final b in books)
+                    if (b.title.trim().isNotEmpty)
+                      Pressable(
+                        onTap: () => openPostBook(b, sharedBy: p.authorName),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(children: [
+                            CoverFace(title: b.title, author: b.author, image: b.cover, w: 28, h: 40, titleSize: 6, authorSize: 5, titleLines: 3, topBorder: 2, spine: 4),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(b.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(14.5, FontWeight.w800, C.ink)),
+                                if (b.author.isNotEmpty)
+                                  Text(b.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: nu(12, FontWeight.w600, C.muted)),
+                              ]),
+                            ),
+                          ]),
+                        ),
+                      ),
                   Text(timeStr, style: nu(11, FontWeight.w600, C.muted)),
                 ],
               ),
@@ -755,18 +759,6 @@ Widget _profilePostCard(BuildContext context, Post p) {
             ],
           ),
         ],
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            const Icon(Icons.favorite_rounded, size: 14, color: Color(0xFFEF4444)),
-            const SizedBox(width: 4),
-            Text('$likes', style: nu(12, FontWeight.w700, C.muted)),
-            const SizedBox(width: 14),
-            const Icon(Icons.share_rounded, size: 14, color: Color(0xFFF26A21)),
-            const SizedBox(width: 4),
-            Text('$shares', style: nu(12, FontWeight.w700, C.muted)),
-          ],
-        ),
       ],
     ),
   );

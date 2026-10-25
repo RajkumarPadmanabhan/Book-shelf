@@ -766,13 +766,13 @@ class _TodoTileState extends State<TodoTile> {
                 border: Border.all(color: const Color.fromRGBO(255, 255, 255, .6), width: 2),
               ),
               alignment: Alignment.center,
-              child: Text(t.done ? '✓' : (t.due != null ? '⏰' : '📌'), style: nu(t.done ? 13 : 11, FontWeight.w800, Colors.white, 1)),
+              child: Text(t.done ? '✓' : (t.timed ? '⏰' : (t.due != null ? '📅' : '📌')), style: nu(t.done ? 13 : 11, FontWeight.w800, Colors.white, 1)),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(
-                  t.done ? 'Done' : (t.dueAt != null ? fmtDue(t.dueAt!) : 'Someday'),
+                  t.done ? 'Done' : fmtTodoWhen(t.dueAt, timed: t.timed),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: nu(13, FontWeight.w800, col.fg, 1.15),
@@ -890,7 +890,7 @@ class _TodoTileState extends State<TodoTile> {
               const Spacer(),
               _Act(
                 icon: Ic.clock,
-                on: t.due != null,
+                on: t.timed,
                 label: showN ? 'Due' : null,
                 fg: col.fg,
                 dark: col.dark,
@@ -899,9 +899,11 @@ class _TodoTileState extends State<TodoTile> {
                   final d = await pickDue(t.dueAt);
                   if (d == null) return;
                   t.due = d.millisecondsSinceEpoch == 0 ? null : d.millisecondsSinceEpoch;
+                  t.timed = t.due != null;
                   store.changed();
                   toast(t.due == null ? 'Due time cleared' : 'Due ${fmtDue(t.dueAt!)}');
                   remindTip(t);
+                  if (t.reminds && store.settings.reminders) Notifier.sync();
                 },
               ),
             ]),
@@ -997,7 +999,7 @@ void openTodo(Todo t) {
         builder: (ctx, _) => AppDialog(
           maxWidth: 380,
           children: [
-            Text(t.done ? '✅ Done${t.doneAt != null ? ' · ${fmtDate(t.doneAt!)}' : ''}' : (t.dueAt != null ? '⏰ ${fmtDue(t.dueAt!)}' : '📌 Someday'),
+            Text(t.done ? '✅ Done${t.doneAt != null ? ' · ${fmtDate(t.doneAt!)}' : ''}' : '${t.timed ? '⏰' : (t.due != null ? '📅' : '📌')} ${fmtTodoWhen(t.dueAt, timed: t.timed)}',
                 style: nu(13, FontWeight.w800, store.isOverdue(t) ? C.error : C.muted)),
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 14, 0, 10),
@@ -1045,8 +1047,8 @@ List<String> parseTags(String v) {
 
 /// When reminders are off, nudge people toward turning them on.
 void remindTip(Todo t) {
-  if (t.due != null && !store.settings.reminders) {
-    Future.delayed(const Duration(milliseconds: 2000), () => toast('Tip: turn on To-do reminders in Settings to get a nudge'));
+  if (t.reminds && !store.settings.reminders) {
+    Future.delayed(const Duration(milliseconds: 2000), () => toast('Tip: turn on To-do reminders in Settings for a popup and a phone notification'));
   }
 }
 
@@ -1055,7 +1057,9 @@ void editTodo(Todo? t) {
   final text = TextEditingController(text: t?.text ?? '');
   final book = TextEditingController(text: t?.book ?? '');
   final tags = TextEditingController(text: (t?.tags ?? const []).map((e) => '#$e').join(' '));
-  DateTime? due = t?.dueAt;
+  final existing = t?.dueAt;
+  DateTime? day = existing == null ? null : DateTime(existing.year, existing.month, existing.day);
+  TimeOfDay? clock = (t != null && t.timed && existing != null) ? TimeOfDay.fromDateTime(existing) : null;
   var err = '', tagErr = '';
   final reading = store.allBooks.where((b) => !b.finished).map((b) => b.title).toSet().take(6).toList();
   openDialog((ctx) => StatefulBuilder(builder: (ctx, set) {
@@ -1088,25 +1092,48 @@ void editTodo(Todo? t) {
             Text('When?', style: nu(13, FontWeight.w800, C.chipText)),
             const SizedBox(height: 6),
             Wrap(spacing: 6, runSpacing: 6, children: [
-              PopChip('No date', on: due == null, fontSize: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () => set(() => due = null)),
-              PopChip('Today', on: due != null && _sameDay(due!, DateTime.now()), fontSize: 13,
-                  pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () => set(() => due = _todayAt())),
-              PopChip('Tomorrow', on: due != null && _sameDay(due!, DateTime.now().add(const Duration(days: 1))), fontSize: 13,
+              PopChip('No date', on: day == null, fontSize: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () => set(() {
+                day = null;
+                clock = null;
+              })),
+              PopChip('Today', on: day != null && _sameDay(day!, DateTime.now()), fontSize: 13,
+                  pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () {
+                final n = DateTime.now();
+                set(() => day = DateTime(n.year, n.month, n.day));
+              }),
+              PopChip('Tomorrow', on: day != null && _sameDay(day!, DateTime.now().add(const Duration(days: 1))), fontSize: 13,
                   pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () {
                 final n = DateTime.now().add(const Duration(days: 1));
-                set(() => due = DateTime(n.year, n.month, n.day, 9));
+                set(() => day = DateTime(n.year, n.month, n.day));
               }),
-              PopChip('Pick…', on: false, dashed: true, fontSize: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () async {
-                final d = await _pickDateTime(ctx, due);
-                if (d != null) set(() => due = d);
+              PopChip('Pick date', on: false, dashed: true, fontSize: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () async {
+                final now = DateTime.now();
+                final d = await showDatePicker(
+                  context: ctx,
+                  initialDate: day ?? now,
+                  firstDate: DateTime(now.year - 1),
+                  lastDate: DateTime(now.year + 5),
+                );
+                if (d != null) set(() => day = DateTime(d.year, d.month, d.day));
               }),
             ]),
-            if (due != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('Due ${fmtDue(due!)}${store.settings.reminders ? ' · you’ll get a reminder' : ''}',
-                    style: nu(12, FontWeight.w700, C.brown)),
-              ),
+            if (day != null) ...[
+              const SizedBox(height: 8),
+              Text('Time?', style: nu(13, FontWeight.w800, C.chipText)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                PopChip('No time', on: clock == null, fontSize: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () => set(() => clock = null)),
+                PopChip(clock == null ? 'Pick time' : _clockLabel(clock!), on: clock != null, fontSize: 13,
+                    pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () async {
+                  final picked = await showTimePicker(context: ctx, initialTime: clock ?? const TimeOfDay(hour: 20, minute: 0));
+                  if (picked != null) set(() => clock = picked);
+                }),
+              ]),
+            ],
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(_dueHint(day, clock), style: nu(12, FontWeight.w700, day != null && clock != null ? C.brown : C.muted)),
+            ),
             const SizedBox(height: 8),
             AppInput(tags, 'Hashtags, up to 3 (e.g. #weekend #fantasy)', maxLength: 60, caps: TextCapitalization.none,
                 onChanged: (_) => set(() => tagErr = '')),
@@ -1139,9 +1166,11 @@ void editTodo(Todo? t) {
                 set(() => tagErr = 'You can add up to 3 hashtags. Remove ${tg.length - 3}.');
                 return false;
               }
-              final ms = due?.millisecondsSinceEpoch;
+              final when = _dueFrom(day, clock);
+              final ms = when?.$1;
+              final timed = when?.$2 ?? false;
               if (t == null) {
-                final nt = Todo(text: v, book: book.text.trim(), tags: tg, due: ms);
+                final nt = Todo(text: v, book: book.text.trim(), tags: tg, due: ms, timed: timed);
                 store.todos.add(nt);
                 TodoUi.f = TodoUi.f == 'done' ? 'all' : TodoUi.f;
                 Sfx.play('pop');
@@ -1153,12 +1182,13 @@ void editTodo(Todo? t) {
                   ..text = v
                   ..book = book.text.trim()
                   ..tags = tg
-                  ..due = ms;
+                  ..due = ms
+                  ..timed = timed;
                 toast('To-do updated');
                 remindTip(t);
               }
               store.changed();
-              if (ms != null && store.settings.reminders) Notifier.sync();
+              if (timed && store.settings.reminders) Notifier.sync();
               return true;
             }),
           ],
@@ -1167,6 +1197,26 @@ void editTodo(Todo? t) {
 }
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _clockLabel(TimeOfDay t) {
+  final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+  final m = t.minute.toString().padLeft(2, '0');
+  return '$h:$m ${t.period == DayPeriod.am ? 'AM' : 'PM'}';
+}
+
+/// Null when there is no date. The bool is true only when a clock time is set.
+(int, bool)? _dueFrom(DateTime? day, TimeOfDay? clock) {
+  if (day == null) return null;
+  if (clock == null) return (DateTime(day.year, day.month, day.day).millisecondsSinceEpoch, false);
+  return (DateTime(day.year, day.month, day.day, clock.hour, clock.minute).millisecondsSinceEpoch, true);
+}
+
+String _dueHint(DateTime? day, TimeOfDay? clock) {
+  if (day == null || clock == null) return 'No popup or phone notification until you set a date and a time.';
+  final due = DateTime(day.year, day.month, day.day, clock.hour, clock.minute);
+  if (!store.settings.reminders) return 'Due ${fmtDue(due)} · turn on To-do reminders for a popup and a phone notification.';
+  return 'Due ${fmtDue(due)} · you’ll get a popup and a phone notification.';
+}
 
 DateTime _todayAt() {
   final n = DateTime.now();

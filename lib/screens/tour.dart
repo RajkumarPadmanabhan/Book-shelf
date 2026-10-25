@@ -155,8 +155,8 @@ class _TourState extends State<Tour> {
     ),
     _Step(
       'Reading To-Dos & Smart Alerts',
-      'Plan your reading schedule with to-dos. If a to-do is due today or starting soon, you get mobile notifications and a 1-hour start popup with OK and Skip buttons. Completing tasks unlocks milestone badges.',
-      ['⏰ 1-hour start popups', '⭐ Star & prioritize', '🏆 Milestone badges'],
+      'Plan your reading schedule with to-dos. Set both a date and a time and you get a phone notification plus a popup with OK and Skip, about an hour before it starts. No date or no time means no reminder. Completing tasks unlocks milestone badges.',
+      ['⏰ Date and time reminders', '⭐ Star & prioritize', '🏆 Milestone badges'],
       const Color(0xFFF6B300),
       () => const _TodoArt(),
       pointerLabel: 'Section 5: Reading To-Dos & Alerts',

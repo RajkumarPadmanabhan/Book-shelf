@@ -35,7 +35,7 @@ void openNotifications() {
               rows.add(_row(
                 dot: late ? C.error : C.brown,
                 title: t.text,
-                sub: '${late ? 'Overdue · ' : ''}${fmtDue(t.dueAt!)}',
+                sub: '${late ? 'Overdue · ' : ''}${fmtTodoWhen(t.dueAt, timed: t.timed)}',
                 action: Pill('Done', kind: Kind.pri, size: 13, pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), onTap: () {
                   _done(t);
                 }),

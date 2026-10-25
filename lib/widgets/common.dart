@@ -521,7 +521,7 @@ class FadeIn extends StatelessWidget {
 
 String plural(int n, String one, [String? many]) => '$n ${n == 1 ? one : (many ?? '${one}s')}';
 
-String fmtDue(DateTime d) {
+String fmtDue(DateTime d, {bool withTime = true}) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(d.year, d.month, d.day);
@@ -533,9 +533,16 @@ String fmtDue(DateTime d) {
     -1 => 'Yesterday',
     _ => '${mon[d.month - 1]} ${d.day}',
   };
+  if (!withTime) return label;
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
   final m = d.minute.toString().padLeft(2, '0');
   return '$label · $h:$m ${d.hour < 12 ? 'AM' : 'PM'}';
+}
+
+/// Date only when no clock time was chosen, otherwise date and time.
+String fmtTodoWhen(DateTime? due, {required bool timed}) {
+  if (due == null) return 'Someday';
+  return fmtDue(due, withTime: timed);
 }
 
 /// 3725 → "1h 2m", 300 → "5 min".

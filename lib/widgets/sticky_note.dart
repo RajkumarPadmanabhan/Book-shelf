@@ -716,7 +716,7 @@ class TodoPinPicker extends StatelessWidget {
             child: Column(children: [
               for (final t in todos)
                 _option(t.id, t.done ? '✅' : '📌', t.text,
-                    t.done ? 'Done' : (t.dueAt != null ? fmtDue(t.dueAt!) : 'Someday')),
+                    t.done ? 'Done' : fmtTodoWhen(t.dueAt, timed: t.timed)),
             ]),
           ),
         ),
